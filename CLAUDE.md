@@ -14,9 +14,15 @@
 - 詳細は [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## コード規約
-<!-- 言語が決まったら追記: フォーマッタ、Lint、命名規則、テストの書き方 -->
-- TODO
+- 構成: 単一HTML(`index.html`)。HTML / Tailwind CSS(CDN) / 素のJavaScript。ビルド工程・外部ライブラリの追加はしない(必要なら先にIssueで相談)。
+- JavaScript: `'use strict'`、インデント2スペース、変数・関数は `camelCase`、定数は `UPPER_SNAKE_CASE`。コメントは日本語。
+- 秘密情報: HubSpotトークンなどをコードに埋め込まない。画面からの入力、またはLocalStorageのみ(読み書きは `try/catch` で囲む)。
+- 外部通信: HubSpot API以外へデータを送信しない。
+- 公開: このリポジトリはPublic。顧客名・個人情報・社内事情をコード、コミット、Issue、PRに書かない。
 
 ## 実行・テスト
-<!-- 言語が決まったら追記 -->
-- TODO: ビルド/テスト/実行コマンド
+- ビルド: 不要。
+- 実行: `index.html` をブラウザで開く。または `python3 -m http.server 8000` を実行して `http://localhost:8000/` を開く。
+- テスト: 自動テストは未整備。サンプルのVTTを貼り付けて「自動解析」を実行し、5項目の抽出、充足度(%)、Ready判定を確認する。
+- HubSpot転記: 実通信はCORSで失敗する場合がある。確認はテスト用の取引・チケットで行い、本番データでは試さない。
+- 公開: GitHub Pages(`main` / root)。`main` へのマージで更新される。
