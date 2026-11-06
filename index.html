@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>商談文字起こし ➔ 発注書自動起票 ＆ 品質ゲートツール</title>
+<script src="https://cdn.tailwindcss.com/3.4.16"></script>
+<style>
+  textarea { resize: vertical; }
+  .drop-active { outline: 3px dashed #3b82f6; outline-offset: -3px; background: #eff6ff; }
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+<header class="bg-white border-b border-slate-200">
+  <div class="max-w-7xl mx-auto px-4 py-4 flex items-center gap-3">
+    <span class="text-2xl">📝</span>
+    <h1 class="text-lg font-bold">商談文字起こし ➔ 発注書自動起票 ＆ 品質ゲートツール</h1>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+  <!-- ===================== 左カラム：商談入力 ===================== -->
+  <section class="space-y-6">
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+      <h2 class="font-bold mb-4">1. 基本設定</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <label class="block">
+          <span class="text-sm font-medium">商材</span>
+          <select id="product" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 bg-white">
+            <option value="nest">nest</option>
+            <option value="RAQMO">RAQMO</option>
+            <option value="その他">その他</option>
+          </select>
+        </label>
+        <label class="block">
+          <span class="text-sm font-medium">顧客名（会社名）</span>
+          <input id="client" type="text" placeholder="株式会社○○" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+        </label>
+        <label class="block">
+          <span class="text-sm font-medium">担当営業</span>
+          <input id="sales" type="text" placeholder="森川" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+        </label>
+        <div class="block">
+          <span class="text-sm font-medium">HubSpot 対象ID</span>
+          <div class="mt-1 flex gap-2">
+            <select id="hsType" class="rounded-lg border border-slate-300 px-2 py-2 bg-white">
+              <option value="deals">取引</option>
+              <option value="tickets">チケット</option>
+            </select>
+            <input id="hsId" type="text" inputmode="numeric" placeholder="11838525" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+      <h2 class="font-bold mb-1">2. Zoom文字起こし入力</h2>
+      <p class="text-xs text-slate-500 mb-3">テキストを貼り付けるか、.vtt / .txt ファイルをここにドラッグ＆ドロップしてください。</p>
+      <div id="dropzone" class="rounded-lg">
+        <textarea id="transcript" rows="12" placeholder="ここに文字起こしを貼り付け、または .vtt / .txt をドロップ"
+          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"></textarea>
+      </div>
+      <div class="mt-2 flex flex-wrap items-center gap-3 text-sm">
+        <label class="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">
+          ファイルを選択
+          <input id="fileInput" type="file" accept=".vtt,.txt,text/plain,text/vtt" class="hidden">
+        </label>
+        <button id="btnClean" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">タイムスタンプ・話者名を除去</button>
+        <span id="cleanStat" class="text-xs text-slate-500"></span>
+      </div>
+      <button id="btnAnalyze" type="button"
+        class="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 font-bold text-white hover:bg-blue-700">🚀 発注書ドラフトを自動解析・生成</button>
+      <p class="mt-2 text-xs text-slate-500">※ 解析はブラウザ内のルールベースで行います（AI・外部送信なし）。抽出結果は必ず目視で確認してください。</p>
+    </div>
+
+    <details id="hsSettings" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+      <summary class="font-bold cursor-pointer">3. HubSpot接続設定（クリックで開閉）</summary>
+      <div class="mt-4 space-y-4">
+        <label class="block">
+          <span class="text-sm font-medium">Private App アクセストークン</span>
+          <input id="hsToken" type="password" autocomplete="off" placeholder="pat-na1-xxxxxxxx"
+            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm">
+        </label>
+        <label class="flex items-center gap-2 text-sm">
+          <input id="hsRemember" type="checkbox">
+          このブラウザのLocalStorageに保存する（共有PCでは非推奨）
+        </label>
+        <label class="block">
+          <span class="text-sm font-medium">転記先プロパティ名（内部名）</span>
+          <input id="hsProp" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm">
+          <span class="text-xs text-slate-500">取引の標準: description ／ チケットの標準: content ／ 社内カスタムプロパティも指定可（既存の値は上書きされます）</span>
+        </label>
+        <p class="text-xs text-slate-500">必要スコープ: crm.objects.deals.write（取引）/ tickets（チケット）。トークンは HubSpot の API 以外には送信しません。</p>
+        <button id="btnClearToken" type="button" class="text-xs text-red-600 underline">保存済みトークンを削除</button>
+      </div>
+    </details>
+  </section>
+
+  <!-- ===================== 右カラム：プレビュー＆連携 ===================== -->
+  <section class="space-y-6">
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+      <div class="flex items-center justify-between gap-3">
+        <h2 class="font-bold">■ 充足度ステータス</h2>
+        <span id="statusPill" class="rounded-full px-3 py-1 text-sm font-bold"></span>
+      </div>
+      <div class="mt-3 flex items-center gap-3">
+        <div class="h-3 flex-1 rounded-full bg-slate-200 overflow-hidden">
+          <div id="scoreBar" class="h-full rounded-full transition-all" style="width:0%"></div>
+        </div>
+        <span id="scoreText" class="text-sm font-bold tabular-nums w-28 text-right"></span>
+      </div>
+      <p id="missingList" class="mt-2 text-xs text-slate-500"></p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+      <h2 class="font-bold mb-1">■ 制作発注書プレビュー（編集可能）</h2>
+      <p class="text-xs text-slate-500 mb-4"><span class="text-red-600 font-bold">*</span> は着工に必要な必須項目です。</p>
+      <div id="orderFields" class="space-y-4"></div>
+      <div class="mt-6 border-t border-slate-200 pt-4">
+        <h3 id="productTitle" class="text-sm font-bold mb-3"></h3>
+        <div id="productFields" class="space-y-4"></div>
+      </div>
+      <div class="mt-6 border-t border-slate-200 pt-4" id="notesWrap"></div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+      <h2 class="font-bold mb-3">■ アクション</h2>
+      <div class="space-y-3">
+        <button id="btnCopyConfirm" type="button" class="w-full rounded-lg bg-orange-500 px-4 py-3 font-bold text-white hover:bg-orange-600">🟠 営業への不足確認文をコピー</button>
+        <button id="btnCopyOrder" type="button" class="w-full rounded-lg bg-slate-700 px-4 py-3 font-bold text-white hover:bg-slate-800">📋 発注書テキストをコピー</button>
+        <button id="btnHubSpot" type="button" class="w-full rounded-lg bg-blue-600 px-4 py-3 font-bold text-white hover:bg-blue-700 disabled:opacity-60">🚀 HubSpotへ転記</button>
+      </div>
+      <div id="apiError" class="hidden mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 whitespace-pre-wrap"></div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 hidden rounded-lg px-5 py-3 text-sm font-bold text-white shadow-lg z-50"></div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+
+  /* ---------- 発注書フィールド定義 ---------- */
+  const FIELDS = [
+    { id: 'overview',  label: '案件概要・制作目的',        critical: true,  rows: 3, ph: '例: LPリニューアル。問い合わせ数の増加が目的' },
+    { id: 'deadline',  label: '希望納期 / 初校希望日',      critical: true,  rows: 2, ph: '例: 初校は11月中旬、公開は12月上旬' },
+    { id: 'target',    label: 'ターゲット層 / 想定ユーザー', critical: true,  rows: 2, ph: '例: 40〜50代の男性経営者' },
+    { id: 'tone',      label: 'デザインのトーン＆マナー',   critical: false, rows: 2, ph: '例: シンプル、高級感、青ベース' },
+    { id: 'urls',      label: '参考サイト・競合URL',       critical: true,  rows: 3, ph: 'https://example.com/（1行に1件）' },
+    { id: 'materials', label: '提供素材の有無',            critical: true,  rows: 3, ph: '例: ロゴ: あり / 画像・写真: なし / テキスト・原稿: あり / ワイヤーフレーム: なし' },
+  ];
+  const CRITICAL = FIELDS.filter(f => f.critical).map(f => f.id);
+
+  // 商材別の特記事項フィールド（項目名は運用に合わせてここを編集）
+  const PRODUCT_FIELDS = {
+    'nest': [
+      { id: 'nest_plan',     label: '利用プラン・ページ数' },
+      { id: 'nest_template', label: 'テンプレート・既存サイトの引き継ぎ' },
+      { id: 'nest_note',     label: 'nest 特記事項' },
+    ],
+    'RAQMO': [
+      { id: 'raqmo_media', label: '掲載・運用媒体' },
+      { id: 'raqmo_tag',   label: '計測タグ・連携ツール' },
+      { id: 'raqmo_note',  label: 'RAQMO 特記事項' },
+    ],
+    'その他': [
+      { id: 'other_note', label: '特記事項' },
+    ],
+  };
+
+  const MISSING = '未確定（要確認）';
+  const values = {};            // 全フィールドの値（商材切替でも保持）
+  const autoFilled = new Set(); // 自動抽出された（未編集の）フィールド
+  const els = {};               // id -> { ta, badge, auto }
+
+  /* ---------- ユーティリティ ---------- */
+  const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* 保存不可環境は無視 */ } };
+  const lsDel = (k) => { try { localStorage.removeItem(k); } catch { /* 同上 */ } };
+  const uniq = (a) => [...new Set(a)];
+  const clip = (s, n = 140) => (s.length > n ? s.slice(0, n) + '…' : s);
+  const filled = (id) => (values[id] || '').trim().length > 0;
+
+  let toastTimer;
+  function toast(msg, ok = true) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 rounded-lg px-5 py-3 text-sm font-bold text-white shadow-lg z-50 ' + (ok ? 'bg-green-600' : 'bg-red-600');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.add('hidden'), 3500);
+  }
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch { ok = false; }
+      ta.remove();
+      return ok;
+    }
+  }
+
+  /* ---------- ① テキストクリーニング ---------- */
+  function cleanTranscript(raw) {
+    const lines = raw.replace(/\r\n?/g, '\n').replace(/^﻿/, '').split('\n');
+    const out = [];
+    let inNote = false;
+    for (const line of lines) {
+      let t = line.trim();
+      if (!t) { inNote = false; continue; }
+      if (/^WEBVTT/i.test(t)) continue;
+      if (/^(NOTE|STYLE|REGION)\b/.test(t)) { inNote = true; continue; }
+      if (inNote) continue;
+      if (/^\d+$/.test(t)) continue;                       // VTTのキュー番号
+      if (/-->/.test(t)) continue;                         // 00:12:34.000 --> 00:12:38.000
+      if (/^\[[^\]]+\]\s*\d{1,2}:\d{2}(:\d{2})?(\.\d+)?$/.test(t)) continue; // [山田 太郎] 00:01:02
+      t = t.replace(/<[^>]+>/g, '');                       // <v 山田 太郎> 等のVTTタグ
+      t = t.replace(/^\[?\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?\]?\s+/, ''); // 行頭のタイムスタンプ
+      // 話者ラベル「山田 太郎: 」（URLの https: は除外）
+      t = t.replace(/^(?!https?:)[^\s:：「」。、]{1,20}(?:[ 　][^\s:：「」。、]{1,20}){0,2}\s*[:：](?!\/\/)\s*/, '');
+      t = t.trim();
+      if (t) out.push(t);
+    }
+    return out.join('\n');
+  }
+
+  /* ---------- ② ルールベース抽出 ---------- */
+  function splitSentences(text) {
+    return text.split('\n')
+      .flatMap(l => l.split(/(?<=[。！？!?])\s*/))
+      .map(s => s.trim())
+      .filter(s => s.length > 1);
+  }
+
+  // 優先語を含む文を先頭にして最大 max 件返す
+  function pickSentences(sents, re, preferRe, max = 3) {
+    const hits = sents.filter(s => re.test(s));
+    const pref = preferRe ? hits.filter(s => preferRe.test(s)) : [];
+    return uniq([...pref, ...hits]).slice(0, max).map(s => clip(s));
+  }
+
+  function extractDeadline(sents) {
+    const re = /(初校|納期|締切|締め切り|期限|公開日|リリース|オープン|ローンチ|入稿|\d{1,2}月(?:の)?(?:上旬|中旬|下旬|初旬|末|頭)|\d{1,2}月\d{1,2}日|\d{1,2}\/\d{1,2}|\d{1,2}日(?:まで|頃|ごろ)|年内|来月中|今月中|週間後)/;
+    return pickSentences(sents, re, /(初校|納期)/, 3).join('\n');
+  }
+
+  function extractTarget(sents) {
+    const re = /(ターゲット|想定(?:ユーザー|顧客|読者)|ユーザー層|顧客層|利用者|対象(?:者|層)|\d{1,2}代|世代|経営者|主婦|学生|シニア|ファミリー|ペルソナ)/;
+    return pickSentences(sents, re, /(ターゲット|ペルソナ|想定)/, 3).join('\n');
+  }
+
+  function extractOverview(sents) {
+    const re = /(目的|課題|リニューアル|新規(?:制作|作成)|制作したい|作りたい|作成したい|LP|ランディングページ|サイト制作|ホームページ|バナー|訴求|問い合わせ|集客|獲得|ご依頼)/;
+    return pickSentences(sents, re, /(目的|課題|リニューアル|したい)/, 3).join('\n');
+  }
+
+  const TONE_WORDS = ['シンプル', '高級感', 'ポップ', '清潔感', '信頼感', '誠実', '落ち着いた', 'モダン', '明るい', '温かい', 'やわらかい',
+    'スタイリッシュ', 'かっこいい', '親しみやすい', '先進的', 'ナチュラル', '高級', 'カジュアル', 'クール', '上品', '重厚感', '洗練'];
+  function extractTone(sents, text) {
+    const words = TONE_WORDS.filter(w => text.includes(w));
+    const colors = uniq([...text.matchAll(/(青|赤|緑|黄|オレンジ|ピンク|紫|白|黒|紺|ネイビー|グレー|ブルー|レッド|グリーン)(?:ベース|系|色|を基調)/g)].map(m => m[0]));
+    const kw = uniq([...words, ...colors]);
+    const ctx = pickSentences(sents, /(トンマナ|雰囲気|テイスト|イメージ|カラー|配色|デザイン)/, null, 2);
+    if (!kw.length && !ctx.length) return '';
+    return [kw.length ? 'キーワード: ' + kw.join('、') : '', ...ctx].filter(Boolean).join('\n');
+  }
+
+  function extractUrls(text) {
+    const m = text.match(/https?:\/\/[^\s<>"'）)」』、。，]+/g) || [];
+    return uniq(m.map(u => u.replace(/[.,;:!?]+$/, ''))).join('\n');
+  }
+
+  const MATERIALS = [
+    { name: 'テキスト・原稿',       re: /(テキスト|原稿|文章|コピー|ライティング)/ },
+    { name: 'ロゴ',                 re: /ロゴ/ },
+    { name: '画像・写真',           re: /(画像|写真|素材|イラスト)/ },
+    { name: 'ワイヤーフレーム・構成案', re: /(ワイヤー|構成案)/ },
+  ];
+  function extractMaterials(sents) {
+    const neg = /(ない|なし|無い|未定|未作成|未用意|これから|用意でき|ありません|持っていません|支給でき|お任せ|制作してほしい|作ってほしい|作成してほしい)/;
+    const pos = /(あり|ある|提供|支給|用意|お渡し|送(?:る|ります|付)|共有|いただ|もらえ|ご準備|手元|お持ち)/;
+    const lines = [];
+    for (const m of MATERIALS) {
+      const hit = sents.filter(s => m.re.test(s) && (neg.test(s) || pos.test(s)));
+      if (!hit.length) continue;
+      lines.push(`${m.name}: ${hit.some(s => neg.test(s)) ? 'なし（または未提供）' : 'あり'}`);
+    }
+    return lines.join('\n');
+  }
+
+  function analyze(text) {
+    const sents = splitSentences(text);
+    return {
+      overview:  extractOverview(sents),
+      deadline:  extractDeadline(sents),
+      target:    extractTarget(sents),
+      tone:      extractTone(sents, text),
+      urls:      extractUrls(text),
+      materials: extractMaterials(sents),
+    };
+  }
+
+  /* ---------- フォーム描画 ---------- */
+  function makeField(f, critical) {
+    const wrap = document.createElement('div');
+    const head = document.createElement('div');
+    head.className = 'flex items-center gap-2 mb-1 flex-wrap';
+    const label = document.createElement('label');
+    label.className = 'text-sm font-medium';
+    label.textContent = f.label;
+    if (critical) {
+      const star = document.createElement('span');
+      star.className = 'text-red-600 font-bold';
+      star.textContent = ' *';
+      label.appendChild(star);
+    }
+    const badge = document.createElement('span');
+    badge.className = 'hidden rounded bg-red-600 px-2 py-0.5 text-xs font-bold text-white';
+    badge.textContent = MISSING;
+    const auto = document.createElement('span');
+    auto.className = 'hidden rounded bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700';
+    auto.textContent = '自動抽出・要目視確認';
+    head.append(label, badge, auto);
+
+    const ta = document.createElement('textarea');
+    ta.rows = f.rows || 2;
+    ta.placeholder = f.ph || '';
+    ta.value = values[f.id] || '';
+    ta.className = 'w-full rounded-lg border px-3 py-2 text-sm';
+    ta.addEventListener('input', () => {
+      values[f.id] = ta.value;
+      autoFilled.delete(f.id);
+      refreshAll();
+    });
+    wrap.append(head, ta);
+    els[f.id] = { ta, badge, auto, critical };
+    return wrap;
+  }
+
+  function renderOrderFields() {
+    const box = $('orderFields');
+    box.textContent = '';
+    FIELDS.forEach(f => box.appendChild(makeField(f, f.critical)));
+    const notes = $('notesWrap');
+    notes.textContent = '';
+    notes.appendChild(makeField({ id: 'notes', label: '備考・その他共有事項', rows: 2, ph: '自由記入' }, false));
+  }
+
+  function renderProductFields() {
+    const p = $('product').value;
+    $('productTitle').textContent = `■ 商材別特記事項（${p}）`;
+    const box = $('productFields');
+    box.textContent = '';
+    for (const f of PRODUCT_FIELDS[p] || []) {
+      box.appendChild(makeField({ ...f, rows: 2 }, false));
+    }
+  }
+
+  /* ---------- ③ 品質ゲート ---------- */
+  function refreshAll() {
+    for (const [id, e] of Object.entries(els)) {
+      const empty = !filled(id);
+      const missing = e.critical && empty;
+      e.badge.classList.toggle('hidden', !missing);
+      e.auto.classList.toggle('hidden', !autoFilled.has(id));
+      e.ta.className = 'w-full rounded-lg border px-3 py-2 text-sm ' +
+        (missing ? 'border-red-500 bg-red-50 ring-1 ring-red-400' : 'border-slate-300 bg-white');
+    }
+    const done = CRITICAL.filter(filled).length;
+    const total = CRITICAL.length;
+    const pct = Math.round((done / total) * 100);
+    const ready = done === total;
+    $('scoreText').textContent = `${done}/${total}項目 (${pct}%)`;
+    const bar = $('scoreBar');
+    bar.style.width = pct + '%';
+    bar.className = 'h-full rounded-full transition-all ' + (ready ? 'bg-green-500' : pct >= 60 ? 'bg-amber-400' : 'bg-red-400');
+    const pill = $('statusPill');
+    pill.textContent = ready ? '✅ 着工準備完了（Ready）' : `⚠ ${pct}% 要確認`;
+    pill.className = 'rounded-full px-3 py-1 text-sm font-bold ' + (ready ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800');
+    const missingLabels = FIELDS.filter(f => f.critical && !filled(f.id)).map(f => f.label);
+    $('missingList').textContent = missingLabels.length ? '未確定: ' + missingLabels.join(' ／ ') : '必須項目はすべて確定しています。';
+  }
+
+  /* ---------- 出力の組み立て（トークン消費ゼロ・純JS） ---------- */
+  const val = (id) => (values[id] || '').trim() || MISSING;
+  const meta = () => ({
+    product: $('product').value,
+    client: $('client').value.trim() || MISSING,
+    sales: $('sales').value.trim() || MISSING,
+    hsId: $('hsId').value.trim() || MISSING,
+  });
+
+  function buildOrderText() {
+    const m = meta();
+    const lines = [
+      '# 制作発注書',
+      '',
+      `- 商材: ${m.product}`,
+      `- 顧客名: ${m.client}`,
+      `- 担当営業: ${m.sales}`,
+      `- HubSpot ID: ${m.hsId}`,
+      '',
+    ];
+    for (const f of FIELDS) {
+      lines.push(`## ${f.label}`, val(f.id), '');
+    }
+    const pf = PRODUCT_FIELDS[m.product] || [];
+    const pLines = pf.filter(f => filled(f.id));
+    if (pLines.length) {
+      lines.push(`## 商材別特記事項（${m.product}）`);
+      pLines.forEach(f => lines.push(`- ${f.label}: ${val(f.id)}`));
+      lines.push('');
+    }
+    if (filled('notes')) lines.push('## 備考', val('notes'), '');
+    return lines.join('\n').replace(/\n+$/, '\n');
+  }
+
+  function buildConfirmMessage() {
+    const m = meta();
+    const miss = FIELDS.filter(f => f.critical && !filled(f.id));
+    if (!miss.length) {
+      return `【発注書確認】${m.client}（${m.product}）\n必須項目はすべて確定しています。このまま着工可能です。`;
+    }
+    return [
+      `【発注書 確認依頼】${m.client}（${m.product}）`,
+      `${m.sales === MISSING ? '担当営業' : m.sales} さん`,
+      '',
+      '制作着工にあたり、商談内容から以下の項目が確認できませんでした。お客様へのご確認をお願いします。',
+      '',
+      ...miss.map(f => `□ ${f.label}`),
+      '',
+      '回答は本スレッドへの返信、またはHubSpotへの記載でお願いします。',
+    ].join('\n');
+  }
+
+  /* ---------- ④ HubSpot API ---------- */
+  function showApiError(msg) {
+    const box = $('apiError');
+    if (!msg) { box.classList.add('hidden'); box.textContent = ''; return; }
+    box.textContent = msg;
+    box.classList.remove('hidden');
+  }
+
+  async function sendToHubSpot() {
+    showApiError('');
+    const token = $('hsToken').value.trim();
+    const id = $('hsId').value.trim();
+    const type = $('hsType').value;
+    const prop = $('hsProp').value.trim();
+    if (!token) { $('hsSettings').open = true; showApiError('HubSpotのアクセストークンが未設定です。左カラム「3. HubSpot接続設定」で入力してください。'); return; }
+    if (!/^\d+$/.test(id)) { showApiError('HubSpot 対象IDは数字で入力してください（左カラム「1. 基本設定」）。'); return; }
+    if (!prop) { $('hsSettings').open = true; showApiError('転記先プロパティ名を入力してください。'); return; }
+
+    const ready = CRITICAL.every(filled);
+    if (!ready && !confirm('未確定の必須項目があります。このまま転記しますか？')) return;
+    if (!confirm(`HubSpotの${type === 'deals' ? '取引' : 'チケット'} ${id} のプロパティ「${prop}」を、発注書の内容で上書きします。よろしいですか？`)) return;
+
+    const btn = $('btnHubSpot');
+    btn.disabled = true;
+    btn.textContent = '送信中…';
+    try {
+      const res = await fetch(`https://api.hubapi.com/crm/v3/objects/${type}/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ properties: { [prop]: buildOrderText() } }),
+      });
+      if (res.ok) { toast('✅ 転記完了'); return; }
+      let detail = '';
+      try { const j = await res.json(); detail = j.message || ''; } catch { /* JSONでない応答 */ }
+      const hints = {
+        400: 'リクエストが不正です。プロパティ名（内部名）が存在するか、型が文字列系か確認してください。',
+        401: 'トークンが無効または期限切れです。Private Appのトークンを確認してください。',
+        403: '権限不足です。Private Appのスコープ（crm.objects.deals.write など）を確認してください。',
+        404: '指定のIDのレコードが見つかりません。取引/チケットの種類とIDを確認してください。',
+        429: 'APIのレート制限に達しました。少し待ってから再実行してください。',
+      };
+      showApiError(`HubSpotへの転記に失敗しました（HTTP ${res.status}）。\n${hints[res.status] || 'HubSpot側でエラーが発生しました。'}${detail ? '\n詳細: ' + detail : ''}`);
+      toast('転記に失敗しました', false);
+    } catch (err) {
+      showApiError(
+        'HubSpotと通信できませんでした。\n' +
+        '・インターネット接続を確認してください。\n' +
+        '・HubSpot APIはブラウザからの直接呼び出し（CORS）を拒否する場合があります。その場合は、' +
+        '「📋 発注書テキストをコピー」でHubSpotへ手動貼り付けしてください。\n' +
+        '詳細: ' + (err && err.message ? err.message : err)
+      );
+      toast('通信に失敗しました', false);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🚀 HubSpotへ転記';
+    }
+  }
+
+  /* ---------- 入力ハンドラ ---------- */
+  function runClean() {
+    const ta = $('transcript');
+    const before = ta.value.length;
+    if (!before) { toast('文字起こしが空です', false); return false; }
+    ta.value = cleanTranscript(ta.value);
+    $('cleanStat').textContent = `整形: ${before.toLocaleString()} → ${ta.value.length.toLocaleString()} 文字`;
+    return true;
+  }
+
+  function runAnalyze() {
+    if (!runClean()) return;
+    const found = analyze($('transcript').value);
+    let n = 0;
+    for (const [id, v] of Object.entries(found)) {
+      if (!v) continue;           // 検出なしは既存入力を保持
+      values[id] = v;
+      autoFilled.add(id);
+      if (els[id]) els[id].ta.value = v;
+      n++;
+    }
+    refreshAll();
+    toast(n ? `${n}項目を自動抽出しました。内容を確認してください` : '抽出できた項目がありません。手動で入力してください', n > 0);
+  }
+
+  async function loadFile(file) {
+    if (!file) return;
+    if (!/\.(vtt|txt)$/i.test(file.name)) { toast('.vtt または .txt ファイルを選択してください', false); return; }
+    $('transcript').value = await file.text();
+    toast(`${file.name} を読み込みました`);
+  }
+
+  function setupDnD() {
+    const dz = $('dropzone');
+    ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('drop-active'); }));
+    ['dragleave', 'drop'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove('drop-active'); }));
+    dz.addEventListener('drop', e => loadFile(e.dataTransfer.files[0]));
+    $('fileInput').addEventListener('change', e => { loadFile(e.target.files[0]); e.target.value = ''; });
+  }
+
+  /* ---------- HubSpot設定の保存 ---------- */
+  const DEFAULT_PROP = { deals: 'description', tickets: 'content' };
+  function initHubSpotSettings() {
+    const savedToken = lsGet('hsToken');
+    if (savedToken) { $('hsToken').value = savedToken; $('hsRemember').checked = true; }
+    $('hsType').value = lsGet('hsType') || 'deals';
+    $('hsProp').value = lsGet('hsProp') || DEFAULT_PROP[$('hsType').value];
+    let propEdited = !!lsGet('hsProp');
+
+    $('hsProp').addEventListener('input', () => { propEdited = true; lsSet('hsProp', $('hsProp').value.trim()); });
+    $('hsType').addEventListener('change', () => {
+      lsSet('hsType', $('hsType').value);
+      if (!propEdited) $('hsProp').value = DEFAULT_PROP[$('hsType').value];
+    });
+    const saveToken = () => {
+      if ($('hsRemember').checked) lsSet('hsToken', $('hsToken').value.trim()); else lsDel('hsToken');
+    };
+    $('hsToken').addEventListener('input', saveToken);
+    $('hsRemember').addEventListener('change', saveToken);
+    $('btnClearToken').addEventListener('click', () => {
+      lsDel('hsToken'); $('hsToken').value = ''; $('hsRemember').checked = false;
+      toast('保存済みトークンを削除しました');
+    });
+  }
+
+  /* ---------- 初期化 ---------- */
+  function init() {
+    renderOrderFields();
+    renderProductFields();
+    setupDnD();
+    initHubSpotSettings();
+    refreshAll();
+
+    $('product').addEventListener('change', () => { renderProductFields(); refreshAll(); });
+    $('btnClean').addEventListener('click', () => { if (runClean()) toast('整形しました'); });
+    $('btnAnalyze').addEventListener('click', runAnalyze);
+    $('btnCopyConfirm').addEventListener('click', async () => {
+      const ok = await copyText(buildConfirmMessage());
+      toast(ok ? '確認文をコピーしました' : 'コピーに失敗しました', ok);
+    });
+    $('btnCopyOrder').addEventListener('click', async () => {
+      const ok = await copyText(buildOrderText());
+      toast(ok ? '発注書テキストをコピーしました' : 'コピーに失敗しました', ok);
+    });
+    $('btnHubSpot').addEventListener('click', sendToHubSpot);
+  }
+  init();
+})();
+</script>
+</body>
+</html>
