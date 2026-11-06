@@ -1,4 +1,4 @@
-# my-first-project
+# kzn-form-tool
 
 3人チームで開発を進めるためのリポジトリです。
 
