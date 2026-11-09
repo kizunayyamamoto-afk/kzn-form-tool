@@ -117,10 +117,14 @@
     </div>
 
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-      <h2 class="font-bold mb-1">■ 制作発注書プレビュー（編集可能）</h2>
+      <div class="flex flex-wrap items-center gap-2 mb-1">
+        <h2 class="font-bold">■ 制作発注書プレビュー（編集可能）</h2>
+        <span id="previewKind" class="rounded-full bg-indigo-100 px-3 py-0.5 text-xs font-bold text-indigo-800"></span>
+      </div>
+      <p id="previewNote" class="text-xs text-slate-500 mb-1"></p>
       <p class="text-xs text-slate-500 mb-4"><span class="text-red-600 font-bold">*</span> は着工に必要な必須項目です。</p>
       <div id="orderFields" class="space-y-4"></div>
-      <div class="mt-6 border-t border-slate-200 pt-4">
+      <div id="productWrap" class="mt-6 border-t border-slate-200 pt-4">
         <h3 id="productTitle" class="text-sm font-bold mb-3"></h3>
         <div id="productFields" class="space-y-4"></div>
       </div>
@@ -155,15 +159,9 @@
     { id: 'urls',      label: '参考サイト・競合URL',       critical: true,  rows: 3, ph: 'https://example.com/（1行に1件）' },
     { id: 'materials', label: '提供素材の有無',            critical: true,  rows: 3, ph: '例: ロゴ: あり / 画像・写真: なし / テキスト・原稿: あり / ワイヤーフレーム: なし' },
   ];
-  const CRITICAL = FIELDS.filter(f => f.critical).map(f => f.id);
 
   // 商材別の特記事項フィールド（項目名は運用に合わせてここを編集）
   const PRODUCT_FIELDS = {
-    'nest': [
-      { id: 'nest_plan',     label: '利用プラン・ページ数' },
-      { id: 'nest_template', label: 'テンプレート・既存サイトの引き継ぎ' },
-      { id: 'nest_note',     label: 'nest 特記事項' },
-    ],
     'RAQMO': [
       { id: 'raqmo_media', label: '掲載・運用媒体' },
       { id: 'raqmo_tag',   label: '計測タグ・連携ツール' },
@@ -174,10 +172,133 @@
     ],
   };
 
+  /* ---------- nest 発注ひな形 ---------- */
+  // 商材が nest のときのプレビュー項目と、HubSpotへ転記するテキストの元になる定義。
+  //   items: 入力項目 { id, out(ひな形の見出し), type, req, label, ph, hint, colonless, warn } か、固定行 { text }
+  //   type : 'line'(1行) / 'area'(複数行) / 'choice'(選択式・opts)
+  //   req  : そのセクションが「対象」のとき必須
+  //   when : セクションが対象になる条件（NEST_ACTIVE のキー）。対象外でも入力は任意
+  // 認証情報（メール・パスワード）は文字起こしから自動抽出しない。
+  const MARK_PH = '●（個数・販促期間などの詳細も追記）';
+  const PW_HINT = 'お客様が明言した場合のみ入力（不明は「ヒアリング」）。発注書とHubSpotに平文で転記されます';
+  const FREQ_OPTIONS = ['毎月', '半年', '一年'];
+  const DASH_LONG = '-'.repeat(80);
+  const DASH = '-'.repeat(70);
+  const EQUALS = '＝'.repeat(20);
+  const fixedLine = (text) => ({ text });
+  const checkPassword = (v) => (v && !/^[A-Za-z0-9]{8,}$/.test(v) && !/(契約時|ヒアリング)/.test(v) ? '半角英数字8文字以上で入力してください' : '');
+
+  const NEST_SECTIONS = [
+    { id: 'products', head: '■受注・販促商品', when: 'always', after: 'dash', items: [
+      { id: 'p_full', out: 'nest フルパック：', type: 'line', ph: MARK_PH },
+      fixedLine('＜単体の場合＞'),
+      { id: 'p_brain',  out: 'nest for BRAIN：',  type: 'line', ph: MARK_PH },
+      { id: 'p_auto',   out: 'nest for AUTO：',   type: 'line', ph: MARK_PH },
+      { id: 'p_review', out: 'nest for REVIEW：', type: 'line', ph: MARK_PH },
+      { id: 'p_aio',    out: 'nest for AIO：',    type: 'line', ph: MARK_PH },
+      fixedLine('その他（詳細記載必須）'),
+      { id: 'p_raqmo_aio',   out: 'RAQMO-LP（AIO対策パッケージ付き）：', type: 'line', ph: MARK_PH },
+      { id: 'p_raqmo_noaio', out: 'RAQMO-LP（AIO対策なし）：',           type: 'line', ph: MARK_PH },
+      fixedLine('＜その他特別発注＞'),
+      { id: 'p_moel',    out: 'LO（MOEL)：',          type: 'line', ph: MARK_PH },
+      { id: 'p_scumo',   out: 'SCUMO（動画作成）：',  type: 'line', ph: MARK_PH },
+      { id: 'p_base',    out: 'BASE：',               type: 'line', ph: MARK_PH },
+      { id: 'p_reserva', out: 'レゼルバ：',           type: 'line', ph: MARK_PH },
+      { id: 'p_other',   out: 'その他（詳細記載必須）：', type: 'line', ph: '内容（詳細必須）' },
+    ] },
+    { id: 'overview', ui: '業種・事業内容', when: 'always', after: 'dash', items: [
+      { id: 'industry', out: '■業種：', type: 'line', req: true },
+      { id: 'business', out: '■何をしている会社か、何を売り込みたいのか：', type: 'area', rows: 3, req: true },
+      { id: 'trouble',  out: '■今何に困っているのか：', type: 'area', rows: 3, req: true,
+        hint: '「集客」や「求人」の場合は、どんなことに困っているか具体的に' },
+      { id: 'strength', out: '■会社・お店の売りや特徴・強み：', type: 'area', rows: 3, req: true,
+        hint: '代表のプロファイルではなく、会社・お店としての売りや強み' },
+    ] },
+    { id: 'body', head: '＜nest本体関連＞', when: 'always', after: 'dash', items: [
+      { id: 'shop', out: '■店舗名：', type: 'line', req: true },
+      { id: 'login_email', out: '■ログインに必要なお客様希望メールアドレス：', type: 'line',
+        hint: '契約時に確認する場合は「契約時に確認予定」' },
+      { id: 'login_pw', out: '■ログインに必要なお客様希望パスワード：', type: 'line', hint: '半角英数字8文字以上。' + PW_HINT, warn: checkPassword },
+      { id: 'freq', out: '■コンサルティングデータプロンプトの更新頻度希望：', type: 'choice', opts: FREQ_OPTIONS, req: true },
+      { id: 'site_url', out: '■登録希望WebサイトURL：', type: 'line',
+        hint: 'お客様がお持ちのWebサイトURL（食べログ等の情報サイトは不可）。KIZUNA以外も記載。Webサイト無しの場合は空欄可' },
+      { id: 'line_reg', out: '■nest公式LINEを登録いただいているか：', type: 'line', req: true, ph: '例: 登録済み／未／○月○日回収時に登録' },
+    ] },
+    { id: 'auto', head: '＜nest for AUTO関連＞', when: 'auto', offNote: 'フルパック／nest for AUTO のとき必要（対象外は空欄でOK）', after: 'dash', items: [
+      fixedLine('■連携希望のSNSとID/PASS'),
+      { id: 'fb_has',  out: '・Facebookの有無：', label: 'Facebookの有無', type: 'line', req: true, ph: 'あり／なし' },
+      { id: 'fb_name', out: 'アカウント名：', label: 'Facebook アカウント名', type: 'line' },
+      { id: 'fb_pw',   out: 'パスワード：',   label: 'Facebook パスワード', type: 'line', hint: PW_HINT },
+      { id: 'fb_url',  out: 'URL：',          label: 'Facebook URL', type: 'line' },
+      { id: 'ig_has',  out: '・Instagramの有無：', label: 'Instagramの有無', type: 'line', req: true, ph: 'あり／なし' },
+      { id: 'ig_name', out: 'アカウント名：', label: 'Instagram アカウント名', type: 'line' },
+      { id: 'ig_pw',   out: 'パスワード：',   label: 'Instagram パスワード', type: 'line', hint: PW_HINT },
+      { id: 'ig_url',  out: 'URL：',          label: 'Instagram URL', type: 'line' },
+      { id: 'x_has',   out: '・X有無：',      label: 'Xの有無', type: 'line', req: true, ph: 'あり／なし' },
+      { id: 'x_name',  out: 'アカウント名：', label: 'X アカウント名', type: 'line' },
+      { id: 'x_pw',    out: 'パスワード：',   label: 'X パスワード', type: 'line', hint: PW_HINT },
+      { id: 'x_url',   out: 'URL：',          label: 'X URL', type: 'line' },
+      { id: 'gbp_has',    out: '・Googleビジネスプロフィールの有無：', label: 'Googleビジネスプロフィールの有無', type: 'line', req: true, ph: 'あり／なし' },
+      { id: 'gbp_owner',  out: 'オーナー権限の有無：', label: 'GBP オーナー権限の有無', type: 'line', req: true, ph: 'あり／なし' },
+      { id: 'gbp_kizuna', out: 'KIZUNAに権限をいただいているか：', label: 'GBP KIZUNAへの権限付与', type: 'line', req: true, ph: '済／未（付与日・担当者）' },
+      { id: 'gbp_url',    out: 'URL：', label: 'GBP URL', type: 'line' },
+    ] },
+    { id: 'aio', head: '＜nest for AIO関連＞', when: 'aio', offNote: 'フルパック／nest for AIO のとき必要（対象外は空欄でOK）', after: 'eq', items: [
+      fixedLine('■店舗情報'),
+      { id: 'store_name',  out: '・店名：',     label: '店名', type: 'line', req: true, hint: '正式表記。表記ゆれがあれば併記' },
+      { id: 'store_tel',   out: '・電話番号；', label: '電話番号', type: 'line', req: true },
+      { id: 'store_zip',   out: '・郵便番号：', label: '郵便番号', type: 'line', req: true },
+      { id: 'store_addr',  out: '・住所：',     label: '住所', type: 'line', req: true },
+      { id: 'store_hours', out: '・営業時間：', label: '営業時間', type: 'line', req: true },
+      fixedLine('■登録希望サイト'),
+      { id: 'site_owner', out: '・KIZUNA作成／お客様保有なのか：', label: 'サイトの保有者', type: 'line', req: true, ph: 'KIZUNA作成／お客様保有／制作中（他社）' },
+      { id: 'ga4', out: '・GA4の設定有無：', label: 'GA4の設定有無', type: 'line', hint: 'KIZUNA作成サイト以外はお聞きください' },
+      fixedLine('■他媒体の掲載状況'),
+      { id: 'media_abc',    out: '・Apple Business Connect', label: '他媒体: Apple Business Connect', type: 'line', colonless: true, ph: '掲載あり／なし／未言及' },
+      { id: 'media_ekiten', out: '・エキテン',               label: '他媒体: エキテン', type: 'line', colonless: true, ph: '掲載あり／なし／未言及' },
+      { id: 'media_itown',  out: '・iタウンページ',          label: '他媒体: iタウンページ', type: 'line', colonless: true, ph: '掲載あり／なし／未言及' },
+      { id: 'media_biz',    out: '・業種別掲載媒体：',       label: '他媒体: 業種別掲載媒体', type: 'line', hint: 'ホットペッパー／食べログなど掲載している媒体' },
+    ] },
+    { id: 'raqmo', head: '【AIO-RAQMO付の場合】', when: 'raqmo', offNote: 'RAQMO-LP（AIO対策パッケージ付き）に入力があるときのみ必要', whenOff: '該当なし', after: 'dash', items: [
+      { id: 'site_name', out: '■サイト名：', type: 'line', req: true, hint: '契約名とサイト名は同じかの確認' },
+      { id: 'site_type', out: '■作成サイトの種類：', type: 'line', req: true, ph: '1Pのみ／ホームページ／特化サイト／既存リニューアル／その他（詳細記載必須）' },
+      { id: 'site_industry', out: '■作成サイトの業種：', type: 'line', req: true },
+      { id: 'site_proposal', out: '■サイトをどのように提案しているのか、お客様の要望：', label: 'サイトの提案内容・お客様の要望', type: 'area', rows: 3, req: true,
+        hint: '提案への反応（好反応／微妙）の「結果」も記載' },
+      fixedLine('■既存サイトの不満点・改善したい点：'),
+      fixedLine('（サイトリニューアルの場合）'),
+      { id: 'site_ng', out: '【不満点】', type: 'area' },
+      { id: 'site_ok', out: '【改善点】', type: 'area' },
+      { id: 'domain', out: '■発注ドメイン名：', type: 'line', req: true },
+      { id: 'domain_type', out: '■ドメイン種別：', type: 'choice', opts: ['新規', '既存（他業者移管）', '既存（ラクモリニューアル）'], req: true },
+      { id: 'sample_urls', out: '■受注時テーマ番号・お客様へ提示したサンプルサイトURLなど：', label: 'テーマ番号・サンプルサイトURL', type: 'area' },
+      { id: 'exist_url', out: '■必須*既存サイトURL：', label: '既存サイトURL', type: 'line', req: true, hint: '無い場合は「なし もしくは --」' },
+      { id: 'interview', out: '■取材の方法（オンライン／訪問）：', type: 'choice', opts: ['オンライン', '訪問'], req: true },
+      { id: 'interview_note', out: '＜取材時の注意事項＞', label: '取材時の注意事項', type: 'area', hint: 'お客様のリテラシーや特徴など' },
+    ] },
+    { id: 'irregular', head: '＜この案件に対するイレギュラー対応共有＞', when: 'always', after: 'dash', items: [
+      fixedLine('＝ 通常行わない提案をしているやイレギュラー対応が必要な場合 ＝'),
+      { id: 'irregular', out: '■必須*詳細：', label: 'イレギュラー対応の詳細', type: 'area', rows: 5, req: true,
+        hint: '無い場合は「なし もしくは --」と記入' },
+    ] },
+  ];
+
+  const PRODUCT_IDS = ['p_full', 'p_brain', 'p_auto', 'p_review', 'p_aio', 'p_raqmo_aio', 'p_raqmo_noaio',
+    'p_moel', 'p_scumo', 'p_base', 'p_reserva', 'p_other'];
+  // セクションが「対象」になる条件
+  const NEST_ACTIVE = {
+    always: () => true,
+    auto:   () => filled('p_full') || filled('p_auto'),
+    aio:    () => filled('p_full') || filled('p_aio'),
+    raqmo:  () => filled('p_raqmo_aio'),
+  };
+  const nestLabel = (f) => f.label || f.out.replace(/^[■・＜【]+/, '').replace(/[：；＞】]+$/, '');
+
   const MISSING = '未確定（要確認）';
   const values = {};            // 全フィールドの値（商材切替でも保持）
   const autoFilled = new Set(); // 自動抽出された（未編集の）フィールド
-  const els = {};               // id -> { ta, badge, auto }
+  const els = {};               // id -> { ta, badge, auto, star, warn, f }
+  const nestSecEls = {};        // nestセクションid -> { sec, note }
 
   /* ---------- ユーティリティ ---------- */
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -311,20 +432,64 @@
     };
   }
 
+
+  // nest用の抽出。認証情報（メール・パスワード）は音声の聞き違いが多く機微のため抽出しない
+  const TROUBLE_RE = /(困って|課題|悩み|できていない|できてい|わからない|分からない|手が回|人手|集客|求人|放置|更新でき|不足|口コミ[^。]*(?:ない|少な|無い))/;
+  const STRENGTH_RE = /(強み|売り|特徴|こだわり|高評価|評価|創業|実績|人気|看板|得意)/;
+  const BUSINESS_RE = /(創業|運営|取り扱|販売|製造|施工|提供|事業|サービス)/;
+  const PHONE_RE = /0\d{1,4}-\d{1,4}-\d{3,4}/;
+  const NON_SITE_RE = /(tabelog|hotpepper|ekiten|itp\.ne\.jp|retty|gnavi|youtube|zoom\.us)/;
+
+  function analyzeNest(text) {
+    const sents = splitSentences(text);
+    const res = {};
+    if (/フルパック/.test(text)) res.p_full = '●';
+
+    const rest = sents.filter(s => !TROUBLE_RE.test(s));
+    res.trouble = pickSentences(sents.filter(s => TROUBLE_RE.test(s)), TROUBLE_RE, /(困|課題|悩み)/, 4).join('\n');
+    const business = pickSentences(rest, BUSINESS_RE, /(創業|事業|取り扱)/, 3);
+    res.business = business.join('\n');
+    res.strength = pickSentences(rest, STRENGTH_RE, /(強み|売り|特徴)/, 4).filter(s => !business.includes(s)).join('\n');
+
+    const phone = text.match(PHONE_RE);
+    if (phone) res.store_tel = phone[0];
+    const noPhone = text.replace(new RegExp(PHONE_RE.source, 'g'), ' ');
+    const zip = noPhone.match(/〒?\s*(\d{3})-(\d{4})/);
+    if (zip) res.store_zip = `〒${zip[1]}-${zip[2]}`;
+    const addr = noPhone.match(/(?:北海道|東京都|京都府|大阪府|[^\s、。]{2,3}県)[^\s、。]{2,40}/);
+    if (addr) res.store_addr = addr[0];
+    const hours = noPhone.match(/(?:\d{1,2}[:：]\d{2}|\d{1,2}時(?:\d{1,2}分)?)\s*(?:〜|～|~|-|－|ー|から)\s*(?:\d{1,2}[:：]\d{2}|\d{1,2}時(?:\d{1,2}分)?)/);
+    const closed = text.match(/定休日?(?:は|:|：)?\s*([^\s。、]{1,8})/);
+    if (hours) res.store_hours = hours[0] + (closed ? ` 定休:${closed[1].replace(/(です|ます|になります)$/, '')}` : '');
+
+    const urls = (text.match(/https?:\/\/[^\s<>"'）)」』、。，]+/g) || []).map(u => u.replace(/[.,;:!?]+$/, ''));
+    for (const u of urls) {
+      if (/instagram\.com/.test(u)) { res.ig_url = res.ig_url || u; res.ig_has = 'あり'; }
+      else if (/(facebook\.com|fb\.com)/.test(u)) { res.fb_url = res.fb_url || u; res.fb_has = 'あり'; }
+      else if (/(^https?:\/\/(?:www\.)?(?:x\.com|twitter\.com))/.test(u)) { res.x_url = res.x_url || u; res.x_has = 'あり'; }
+      else if (/(share\.google|maps\.app\.goo\.gl|google\.[a-z.]+\/maps|g\.page|business\.google)/.test(u)) { res.gbp_url = res.gbp_url || u; res.gbp_has = 'あり'; }
+      else if (!res.site_url && !NON_SITE_RE.test(u)) res.site_url = u;
+    }
+
+    const freqSent = sents.find(s => /(更新|頻度|プロンプト)/.test(s) && /(毎月|半年|一年|1年|年に?1回)/.test(s));
+    if (freqSent) res.freq = /毎月/.test(freqSent) ? '毎月' : /半年/.test(freqSent) ? '半年' : '一年';
+    return res;
+  }
+
   /* ---------- フォーム描画 ---------- */
-  function makeField(f, critical) {
+  const isNest = () => $('product').value === 'nest';
+
+  function makeField(f) {
     const wrap = document.createElement('div');
     const head = document.createElement('div');
     head.className = 'flex items-center gap-2 mb-1 flex-wrap';
     const label = document.createElement('label');
     label.className = 'text-sm font-medium';
     label.textContent = f.label;
-    if (critical) {
-      const star = document.createElement('span');
-      star.className = 'text-red-600 font-bold';
-      star.textContent = ' *';
-      label.appendChild(star);
-    }
+    const star = document.createElement('span');   // 必須マーク（requiredList に応じて表示）
+    star.className = 'hidden text-red-600 font-bold';
+    star.textContent = ' *';
+    label.appendChild(star);
     const badge = document.createElement('span');
     badge.className = 'hidden rounded bg-red-600 px-2 py-0.5 text-xs font-bold text-white';
     badge.textContent = MISSING;
@@ -333,28 +498,84 @@
     auto.textContent = '自動抽出・要目視確認';
     head.append(label, badge, auto);
 
-    const ta = document.createElement('textarea');
-    ta.rows = f.rows || 2;
+    let ta;
+    if (f.type === 'line') {
+      ta = document.createElement('input');
+      ta.type = 'text';
+    } else if (f.type === 'choice') {
+      ta = document.createElement('select');
+      for (const o of ['', ...f.opts]) {
+        const op = document.createElement('option');
+        op.value = o;
+        op.textContent = o || '（未選択）';
+        ta.appendChild(op);
+      }
+    } else {
+      ta = document.createElement('textarea');
+      ta.rows = f.rows || 2;
+    }
     ta.placeholder = f.ph || '';
     ta.value = values[f.id] || '';
     ta.className = 'w-full rounded-lg border px-3 py-2 text-sm';
-    ta.addEventListener('input', () => {
+    const onInput = () => {
       values[f.id] = ta.value;
       autoFilled.delete(f.id);
       refreshAll();
-    });
-    wrap.append(head, ta);
-    els[f.id] = { ta, badge, auto, critical };
+    };
+    ta.addEventListener('input', onInput);
+    ta.addEventListener('change', onInput);
+
+    const warn = document.createElement('p');
+    warn.className = 'hidden mt-1 text-xs font-bold text-amber-700';
+    wrap.appendChild(head);
+    if (f.hint) {
+      const hint = document.createElement('p');
+      hint.className = 'mb-1 text-xs text-slate-500';
+      hint.textContent = f.hint;
+      wrap.appendChild(hint);
+    }
+    wrap.append(ta, warn);
+    els[f.id] = { ta, badge, auto, star, warn, f };
     return wrap;
+  }
+
+  function renderNestSections(box) {
+    for (const s of NEST_SECTIONS) {
+      const sec = document.createElement('div');
+      sec.className = 'rounded-lg border border-slate-200 p-4 space-y-3';
+      const head = document.createElement('div');
+      head.className = 'flex flex-wrap items-center gap-2';
+      const h = document.createElement('h3');
+      h.className = 'text-sm font-bold text-indigo-900';
+      h.textContent = s.head || s.ui;
+      const note = document.createElement('span');
+      note.className = 'hidden rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-600';
+      note.textContent = s.offNote || '';
+      head.append(h, note);
+      sec.appendChild(head);
+      for (const it of s.items) {
+        if (it.text !== undefined) {
+          const p = document.createElement('p');
+          p.className = 'pt-1 text-xs font-bold text-slate-500';
+          p.textContent = it.text;
+          sec.appendChild(p);
+        } else {
+          sec.appendChild(makeField({ ...it, label: nestLabel(it) }));
+        }
+      }
+      box.appendChild(sec);
+      nestSecEls[s.id] = { sec, note };
+    }
   }
 
   function renderOrderFields() {
     const box = $('orderFields');
-    box.textContent = '';
-    FIELDS.forEach(f => box.appendChild(makeField(f, f.critical)));
     const notes = $('notesWrap');
+    box.textContent = '';
     notes.textContent = '';
-    notes.appendChild(makeField({ id: 'notes', label: '備考・その他共有事項', rows: 2, ph: '自由記入' }, false));
+    if (isNest()) { renderNestSections(box); return; }
+    FIELDS.forEach(f => box.appendChild(makeField({ ...f, type: 'area' })));
+    notes.appendChild(makeField({ id: 'notes', label: '備考・その他共有事項', type: 'area', rows: 2, ph: '自由記入' }));
   }
 
   function renderProductFields() {
@@ -363,22 +584,65 @@
     const box = $('productFields');
     box.textContent = '';
     for (const f of PRODUCT_FIELDS[p] || []) {
-      box.appendChild(makeField({ ...f, rows: 2 }, false));
+      box.appendChild(makeField({ ...f, type: 'area', rows: 2 }));
     }
   }
 
+  // 商材に応じてプレビュー全体を描き直す（入力値は values に保持されるので切替で消えない）
+  function renderAll() {
+    for (const k of Object.keys(els)) delete els[k];
+    for (const k of Object.keys(nestSecEls)) delete nestSecEls[k];
+    const nest = isNest();
+    renderOrderFields();
+    renderProductFields();
+    $('productWrap').classList.toggle('hidden', nest);
+    $('notesWrap').classList.toggle('hidden', nest);
+    $('previewKind').textContent = nest ? 'nest用ひな形' : `${$('product').value}用の項目`;
+    $('previewNote').textContent = nest
+      ? 'nestの発注ひな形（受注・販促商品／nest本体／AUTO／AIO／AIO-RAQMO付／イレギュラー）の全項目です。この形式のテキストがHubSpotへ転記されます。'
+      : '制作発注の項目（納期・ターゲット・トンマナ・参考URL・提供素材ほか）です。商材をnestにするとnestの発注ひな形に切り替わります。';
+  }
+
   /* ---------- ③ 品質ゲート ---------- */
+  // 現在の商材で必須の項目一覧（ok = 入力済み）。nestは契約プランに応じて必須が変わる
+  function requiredList() {
+    if (!isNest()) {
+      return FIELDS.filter(f => f.critical).map(f => ({ id: f.id, label: f.label, ok: filled(f.id) }));
+    }
+    const list = [{ id: 'p_full', label: '受注・販促商品（いずれか1つ以上に●）', ok: PRODUCT_IDS.some(filled) }];
+    for (const s of NEST_SECTIONS) {
+      if (!NEST_ACTIVE[s.when]()) continue;
+      for (const it of s.items) {
+        if (it.req) list.push({ id: it.id, label: nestLabel(it), ok: filled(it.id) });
+      }
+    }
+    return list;
+  }
+
   function refreshAll() {
+    const req = requiredList();
+    const reqMap = new Map(req.map(r => [r.id, r]));
     for (const [id, e] of Object.entries(els)) {
-      const empty = !filled(id);
-      const missing = e.critical && empty;
+      const r = reqMap.get(id);
+      const missing = !!r && !r.ok;
+      e.star.classList.toggle('hidden', !r);
       e.badge.classList.toggle('hidden', !missing);
       e.auto.classList.toggle('hidden', !autoFilled.has(id));
       e.ta.className = 'w-full rounded-lg border px-3 py-2 text-sm ' +
         (missing ? 'border-red-500 bg-red-50 ring-1 ring-red-400' : 'border-slate-300 bg-white');
+      const w = e.f.warn ? e.f.warn((values[id] || '').trim()) : '';
+      e.warn.textContent = w;
+      e.warn.classList.toggle('hidden', !w);
     }
-    const done = CRITICAL.filter(filled).length;
-    const total = CRITICAL.length;
+    for (const s of NEST_SECTIONS) {
+      const e = nestSecEls[s.id];
+      if (!e) continue;
+      const off = !NEST_ACTIVE[s.when]();
+      e.note.classList.toggle('hidden', !off || !s.offNote);
+      e.sec.classList.toggle('opacity-60', off);
+    }
+    const done = req.filter(r => r.ok).length;
+    const total = req.length;
     const pct = Math.round((done / total) * 100);
     const ready = done === total;
     $('scoreText').textContent = `${done}/${total}項目 (${pct}%)`;
@@ -388,7 +652,7 @@
     const pill = $('statusPill');
     pill.textContent = ready ? '✅ 着工準備完了（Ready）' : `⚠ ${pct}% 要確認`;
     pill.className = 'rounded-full px-3 py-1 text-sm font-bold ' + (ready ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800');
-    const missingLabels = FIELDS.filter(f => f.critical && !filled(f.id)).map(f => f.label);
+    const missingLabels = req.filter(r => !r.ok).map(r => r.label);
     $('missingList').textContent = missingLabels.length ? '未確定: ' + missingLabels.join(' ／ ') : '必須項目はすべて確定しています。';
   }
 
@@ -401,7 +665,35 @@
     hsId: $('hsId').value.trim() || MISSING,
   });
 
+  // nestひな形に入力内容を埋めたテキスト（HubSpot転記・コピー用）
+  function buildNestText() {
+    const out = ['【nestの発注】', '', DASH_LONG, ''];
+    for (const s of NEST_SECTIONS) {
+      const active = NEST_ACTIVE[s.when]();
+      if (s.head) out.push(s.head, '');
+      if (!active && s.whenOff) {
+        out.push(s.whenOff, '');
+      } else {
+        for (const it of s.items) {
+          if (it.text !== undefined) { out.push(it.text, ''); continue; }
+          const v = (values[it.id] || '').trim();
+          const shown = v || (it.req && active ? MISSING : '');
+          if (it.type === 'area') {
+            out.push(shown ? `${it.out}\n${shown}` : it.out, '');
+          } else if (it.colonless) {
+            out.push(shown ? `${it.out}：${shown}` : it.out, '');
+          } else {
+            out.push(`${it.out}${shown}`, '');
+          }
+        }
+      }
+      out.push(s.after === 'eq' ? EQUALS : DASH, '');
+    }
+    return out.join('\n').replace(/\n+$/, '\n');
+  }
+
   function buildOrderText() {
+    if (isNest()) return buildNestText();
     const m = meta();
     const lines = [
       '# 制作発注書',
@@ -428,7 +720,7 @@
 
   function buildConfirmMessage() {
     const m = meta();
-    const miss = FIELDS.filter(f => f.critical && !filled(f.id));
+    const miss = requiredList().filter(r => !r.ok);
     if (!miss.length) {
       return `【発注書確認】${m.client}（${m.product}）\n必須項目はすべて確定しています。このまま着工可能です。`;
     }
@@ -438,7 +730,7 @@
       '',
       '制作着工にあたり、商談内容から以下の項目が確認できませんでした。お客様へのご確認をお願いします。',
       '',
-      ...miss.map(f => `□ ${f.label}`),
+      ...miss.map(r => `□ ${r.label}`),
       '',
       '回答は本スレッドへの返信、またはHubSpotへの記載でお願いします。',
     ].join('\n');
@@ -462,7 +754,7 @@
     if (!/^\d+$/.test(id)) { showApiError('HubSpot 対象IDは数字で入力してください（左カラム「1. 基本設定」）。'); return; }
     if (!prop) { $('hsSettings').open = true; showApiError('転記先プロパティ名を入力してください。'); return; }
 
-    const ready = CRITICAL.every(filled);
+    const ready = requiredList().every(r => r.ok);
     if (!ready && !confirm('未確定の必須項目があります。このまま転記しますか？')) return;
     if (!confirm(`HubSpotの${type === 'deals' ? '取引' : 'チケット'} ${id} のプロパティ「${prop}」を、発注書の内容で上書きします。よろしいですか？`)) return;
 
@@ -514,7 +806,7 @@
 
   function runAnalyze() {
     if (!runClean()) return;
-    const found = analyze($('transcript').value);
+    const found = isNest() ? analyzeNest($('transcript').value) : analyze($('transcript').value);
     let n = 0;
     for (const [id, v] of Object.entries(found)) {
       if (!v) continue;           // 検出なしは既存入力を保持
@@ -569,13 +861,12 @@
 
   /* ---------- 初期化 ---------- */
   function init() {
-    renderOrderFields();
-    renderProductFields();
+    renderAll();
     setupDnD();
     initHubSpotSettings();
     refreshAll();
 
-    $('product').addEventListener('change', () => { renderProductFields(); refreshAll(); });
+    $('product').addEventListener('change', () => { renderAll(); refreshAll(); });
     $('btnClean').addEventListener('click', () => { if (runClean()) toast('整形しました'); });
     $('btnAnalyze').addEventListener('click', runAnalyze);
     $('btnCopyConfirm').addEventListener('click', async () => {
