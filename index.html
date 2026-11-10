@@ -486,8 +486,23 @@
       .filter(s => s.length > 1);
   }
 
-  // [{ s: 文, role: 'sales' | 'customer' | 'unknown' }]
-  const sentenceList = (utts) => utts.flatMap(u => splitSentences(u.text).map(s => ({ s, role: roleOf(u.speaker) })));
+  // お客様のうなずき・了承（直前の営業の提案を受け入れた返事）。否定・保留の言葉が続く場合は了承としない
+  const AGREE_RE = /^(?:はい|ええ(?!と)|そうですね|そうです|そうなんです|そうしたいです|お願いします|お願いしたいです|いいですね|いいと思います|良いと思います|大丈夫です|問題ないです|それでお願い|それでいいです|それで大丈夫|なるほど|ぜひ|了解|承知|その通り|おっしゃる通り|まさに|そう思います)/;
+  const DISAGREE_RE = /(いえ|いや|違|ちょっと|でも|しかし|難しい|微妙|やめ|いらない|不要|ではなく|検討|考えて|考えます|持ち帰|保留)/;
+  const isAgreement = (text) => {
+    const t = text.trim().replace(/^[、,，\s]+/, '');
+    return AGREE_RE.test(t) && !DISAGREE_RE.test(t.slice(0, 30));
+  };
+
+  // [{ s: 文, role: 'sales' | 'customer' | 'unknown', agreed: お客様が了承した営業の提案か }]
+  // 営業が提案し、お客様が「はい」「そうですね」などと返した場合、その提案はお客様の希望として扱う
+  function sentenceList(utts) {
+    const agreed = new Set();   // お客様が了承した営業発言の添字（返事の直前の営業発言だけ）
+    utts.forEach((u, i) => {
+      if (i > 0 && roleOf(u.speaker) === 'customer' && isAgreement(u.text) && roleOf(utts[i - 1].speaker) === 'sales') agreed.add(i - 1);
+    });
+    return utts.flatMap((u, i) => splitSentences(u.text).map(s => ({ s, role: roleOf(u.speaker), agreed: agreed.has(i) })));
+  }
   const rank = (arr, preferRe) => (preferRe ? [...arr.filter(s => preferRe.test(s)), ...arr.filter(s => !preferRe.test(s))] : arr);
 
   // KIZUNA側のサービス紹介・料金の説明（お客様の目的ではない）
@@ -495,15 +510,43 @@
   // 営業の発言のうち、お客様自身のことを言っているもの
   const TO_CUSTOMER_RE = /(御社|貴社|貴店|お店|店舗|お客様の|ご要望|おっしゃ|のお店)/;
 
-  // お客様（役割不明を含む）の発言から優先して拾い、無ければ営業の「お客様向けの提案」を【営業発言】付きで補う
+  // 話し言葉を、発注書に載せて意味が通る言い切りの文に整える（ルール処理のみ。AIは使わない）
+  //   例: 「えーと、ターゲットは学生さんですよね。」→「ターゲットは学生さんです。」
+  //       「ホームページを新しくしたいとのことでしたね。」→「ホームページを新しくしたい。」
+  const FILLER_HEAD_RE = /^(?:えっと|えーと|ええと|えー|あのー|あの|まあ|なんか|そうですね|そうなんですよ|いいえ|いえ|いや|はい|ええ|それで|で|じゃあ|では)[、,，\s]+/;
+  function tidySentence(s0) {
+    let s = s0.trim();
+    for (let i = 0; i < 3 && FILLER_HEAD_RE.test(s); i++) s = s.replace(FILLER_HEAD_RE, '');
+    s = s.replace(/(?:とのこと|ということ)(?:で(?:した|す)|でしょう|でよろしい|でいい)(?:ね|よね|か|でしょうか|ですか)?[。！？!?]*$/, '。');
+    s = s.replace(/でよろしい(?:でしょうか|ですか)[。？?]*$/, 'です。');
+    s = s.replace(/で?いかがでしょうか[。？?]*$/, 'です。');
+    s = s.replace(/(ですよね|ますよね|でしたよね|ましたよね)[。！？!?]*$/, (m, a) => a.replace('よね', '') + '。');
+    s = s.replace(/(です|ます|でした|ました)(?:ね|よ)[。！!]*$/, '$1。');
+    s = s.replace(/(?:でしょうか|ですかね|でしょうかね|ですか)[。？?]*$/, 'です。');
+    s = s.replace(/[？?]+$/, '。').replace(/[。！!]{2,}$/, '。').replace(/\s{2,}/g, ' ').trim();
+    return /[。！!]$/.test(s) ? s : s + '。';
+  }
+  // 長い文は読点で区切って省略する（文の途中で切れて意味が通らなくならないように）
+  function clipNatural(s, n = 120) {
+    if (s.length <= n) return s;
+    const cut = s.slice(0, n);
+    const at = Math.max(cut.lastIndexOf('、'), cut.lastIndexOf('，'), cut.lastIndexOf(','));
+    return (at > n / 2 ? cut.slice(0, at) : cut) + '…';
+  }
+  // 他の文に含まれてしまう短い文（言い直し・繰り返し）を除く
+  const dropContained = (arr) => arr.filter((s, i) => !arr.some((o, j) => j !== i && o.length > s.length && o.includes(s.replace(/。$/, ''))));
+
+  // 優先順: お客様（役割不明を含む）の発言 → お客様が了承した営業の提案 → （どちらも無ければ）お客様向けの営業発言を【営業発言】付きで補う
   function pickBy(sl, re, preferRe, max = 3, { salesFallback = true } = {}) {
     const ok = (x) => re.test(x.s) && !SELF_RE.test(x.s);
-    let picked = rank(sl.filter(x => x.role !== 'sales' && ok(x)).map(x => x.s), preferRe).slice(0, max);
+    const own = rank(sl.filter(x => x.role !== 'sales' && ok(x)).map(x => tidySentence(x.s)), preferRe);
+    const agreedSales = rank(sl.filter(x => x.role === 'sales' && x.agreed && ok(x)).map(x => tidySentence(x.s)), preferRe);
+    let picked = dropContained(uniq([...own, ...agreedSales])).slice(0, max);
     if (!picked.length && salesFallback) {
-      picked = rank(sl.filter(x => x.role === 'sales' && ok(x) && TO_CUSTOMER_RE.test(x.s)).map(x => x.s), preferRe)
-        .slice(0, max).map(s => '【営業発言】' + s);
+      picked = rank(sl.filter(x => x.role === 'sales' && ok(x) && TO_CUSTOMER_RE.test(x.s)).map(x => tidySentence(x.s)), preferRe)
+        .slice(0, max).map(x => '【営業発言】' + x);
     }
-    return uniq(picked).map(x => clip(x));
+    return uniq(picked).map(x => clipNatural(x));
   }
 
   // 自社の説明を除かず、全員の発言から拾う（販促の提案内容など、営業の発言が正しい情報源になる項目用）
@@ -522,9 +565,10 @@
   const TONE_WORDS = ['シンプル', '高級感', 'ポップ', '清潔感', '信頼感', '誠実', '落ち着いた', 'モダン', '明るい', '温かい', 'やわらかい',
     'スタイリッシュ', 'かっこいい', '親しみやすい', '先進的', 'ナチュラル', '高級', 'カジュアル', 'クール', '上品', '重厚感', '洗練',
     'おしゃれ', 'かわいい', '可愛い', '和風', '華やか'];
-  // トンマナはお客様の発言を優先する（営業の提案語は拾わない）。お客様の発言が無い場合のみ全体から探す
+  // トンマナはお客様の発言と、お客様が了承した営業の提案から拾う（了承されていない営業の提案語は拾わない）。
+  // お客様の発言が無い場合のみ全体から探す
   function extractTone(sl) {
-    const own = sl.filter(x => x.role !== 'sales');
+    const own = sl.filter(x => x.role !== 'sales' || x.agreed);
     const base = (own.length ? own : sl).map(x => x.s).join('\n');
     const found = TONE_WORDS.filter(w => base.includes(w));
     const words = found.filter(w => !found.some(o => o !== w && o.includes(w)));   // 「高級感」があれば「高級」は省く
