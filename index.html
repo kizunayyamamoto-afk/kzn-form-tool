@@ -19,6 +19,19 @@
   </div>
 </header>
 
+<!-- ===================== 起動時：商材の選択 ===================== -->
+<div id="startScreen" class="fixed inset-0 z-40 flex items-center justify-center bg-slate-50 p-6">
+  <div class="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+    <h2 class="text-xl font-bold">今回の案件はどちらですか？</h2>
+    <p class="mt-2 text-sm text-slate-500">選ぶと発注書の作成画面が開きます。Zoomの文字起こし（.vtt / .txt）を入れる（または貼り付ける）と、自動で項目を埋めます。</p>
+    <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <button type="button" data-product="nest" class="rounded-xl bg-blue-600 px-6 py-6 text-lg font-bold text-white hover:bg-blue-700">nest</button>
+      <button type="button" data-product="RAQMO" class="rounded-xl bg-indigo-600 px-6 py-6 text-lg font-bold text-white hover:bg-indigo-700">RAQMO<span class="block text-xs font-normal">制作発注</span></button>
+    </div>
+    <button type="button" data-product="その他" class="mt-4 text-xs text-slate-500 underline">その他の案件</button>
+  </div>
+</div>
+
 <main class="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
 
   <!-- ===================== 左カラム：商談入力 ===================== -->
@@ -26,7 +39,7 @@
 
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
       <h2 class="font-bold mb-1">1. Zoom文字起こし入力！！</h2>
-      <p class="text-xs text-slate-500 mb-3">テキストを貼り付けるか、.vtt / .txt ファイルをここにドラッグ＆ドロップしてください。</p>
+      <p class="text-xs text-slate-500 mb-3">テキストを貼り付けるか、.vtt / .txt ファイルをここにドラッグ＆ドロップしてください。貼り付け・読み込みと同時に自動で解析して、右の発注書プレビューを埋めます。</p>
       <div id="dropzone" class="rounded-lg">
         <textarea id="transcript" rows="12" placeholder="ここに文字起こしを貼り付け、または .vtt / .txt をドロップ"
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"></textarea>
@@ -36,6 +49,7 @@
           ファイルを選択
           <input id="fileInput" type="file" accept=".vtt,.txt,text/plain,text/vtt" class="hidden">
         </label>
+        <button id="btnClipboard" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">📋 クリップボードから取り込む</button>
         <button id="btnClean" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">タイムスタンプ・話者名を除去</button>
         <span id="cleanStat" class="text-xs text-slate-500"></span>
       </div>
@@ -1124,6 +1138,38 @@
     runAnalyze();   // 読み込んだらそのまま整形・解析して項目を埋める
   }
 
+  // クリップボードの文字起こしをそのまま取り込んで解析する（ブラウザの許可が必要）
+  async function importFromClipboard() {
+    try {
+      const t = await navigator.clipboard.readText();
+      if (!t.trim()) { toast('クリップボードが空です', false); return; }
+      $('transcript').value = t;
+      runAnalyze();
+    } catch {
+      toast('クリップボードを読み取れませんでした。入力欄に貼り付け（Ctrl+V）してください', false);
+    }
+  }
+
+  // 起動時の商材選択。URLに ?product=nest / ?product=raqmo を付けると選択画面を飛ばして開く
+  function chooseProduct(p, announce = true) {
+    $('product').value = p;
+    const start = $('startScreen');
+    if (start) start.remove();
+    renderAll();
+    refreshAll();
+    $('transcript').focus();
+    if (announce) toast('文字起こし（.vtt / .txt）を入れるか貼り付けると、自動で項目を埋めます');
+  }
+  function setupStartScreen() {
+    const byQuery = { nest: 'nest', raqmo: 'RAQMO' };
+    let q = '';
+    try { q = (new URLSearchParams(location.search).get('product') || '').toLowerCase(); } catch { q = ''; }
+    document.querySelectorAll('#startScreen [data-product]').forEach(b => {
+      b.addEventListener('click', () => chooseProduct(b.dataset.product));
+    });
+    if (byQuery[q]) chooseProduct(byQuery[q], false);
+  }
+
   function setupDnD() {
     const dz = $('dropzone');
     ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('drop-active'); }));
@@ -1177,6 +1223,9 @@
       toast(ok ? '発注書テキストをコピーしました' : 'コピーに失敗しました', ok);
     });
     $('btnHubSpot').addEventListener('click', sendToHubSpot);
+    $('btnClipboard').addEventListener('click', importFromClipboard);
+    $('transcript').addEventListener('paste', () => setTimeout(runAnalyze, 0));   // 貼り付けたらそのまま解析
+    setupStartScreen();
   }
   init();
 })();
