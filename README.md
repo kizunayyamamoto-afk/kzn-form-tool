@@ -21,3 +21,18 @@ Zoom商談の文字起こしから制作発注書の項目を自動抽出し、�
 
 ## 秘密情報の扱い
 APIキーやトークンはリポジトリにcommitしないでください。`.env` は `.gitignore` 済みです。
+
+## 発注書変換スキル(Claude Code)
+Zoom文字起こしを発注書に変換する、**種類別の専用スキル**です。種類ごとに完全に分離しており、書式・ルールは混ざりません。
+
+| コマンド | 対象 | 見出し |
+|---|---|---|
+| `/order-raqmo` | RAQMO(制作発注) | 【制作発注】 |
+| `/order-nest` | nestの発注 | 【nestの発注】 |
+
+- 使い方: `/order-nest` の後ろに文字起こしを貼る(または実行後に貼る)。出力は「発注書本文」と「要確認リスト」。
+- 自動では起動しません(`disable-model-invocation`)。必ずコマンドで種類を選んでください。
+- 場所: `.claude/skills/order-raqmo/` と `.claude/skills/order-nest/`(各 `SKILL.md`=変換ルール、`template.md`=書式、`learning.md`=過去事例の学習メモ)。
+- 種類の見分け方: 「nest / フルパック / AIO / 口コミ誘導」が出ればnest、「ドメイン / MEETO / MOFUL / サイト名」が出ればRAQMO。
+- nestにRAQMO-LP(AIO付)が付く場合は、nestの発注書内の【AIO-RAQMO付の場合】欄に書きます(RAQMO書式は使わない)。別契約なら2通に分けて作成します。
+- パスワードの扱いは種類で異なります(RAQMO=書かない、nest=お客様が明言した場合のみ記入)。発注書には機微情報が入りうるため、Gitや共有チャットに貼らないでください。
