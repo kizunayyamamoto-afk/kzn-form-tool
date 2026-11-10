@@ -57,11 +57,22 @@
           このブラウザのLocalStorageに保存する（共有PCでは非推奨）
         </label>
         <label class="block">
-          <span class="text-sm font-medium">転記先プロパティ名（内部名）</span>
+          <span class="text-sm font-medium">発注書を入れるチケットのプロパティ名（内部名）</span>
           <input id="hsProp" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm">
-          <span class="text-xs text-slate-500">取引の標準: description ／ チケットの標準: content ／ 社内カスタムプロパティも指定可（既存の値は上書きされます）</span>
+          <span class="text-xs text-slate-500">チケット本文の標準: content ／ 社内カスタムプロパティも指定可</span>
         </label>
-        <p class="text-xs text-slate-500">必要スコープ: crm.objects.deals.write（取引）/ tickets（チケット）。トークンは HubSpot の API 以外には送信しません。</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <label class="block">
+            <span class="text-sm font-medium">パイプラインID</span>
+            <input id="hsPipeline" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm">
+          </label>
+          <label class="block">
+            <span class="text-sm font-medium">ステージID</span>
+            <input id="hsStage" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm">
+          </label>
+        </div>
+        <p class="text-xs text-slate-500">チケットの作成にはパイプラインとステージが必須です。標準のサポートパイプライン「0」・ステージ「新規」の「1」が初期値です。社内で変更している場合はHubSpotの設定に合わせてください。</p>
+        <p class="text-xs text-slate-500">必要スコープ: tickets（チケットの作成）、取引・会社の読み取り/書き込み（関連付けと会社の自動取得）。不足している場合はエラー（403）で案内します。トークンは HubSpot の API 以外には送信しません。</p>
         <button id="btnClearToken" type="button" class="text-xs text-red-600 underline">保存済みトークンを削除</button>
       </div>
     </details>
@@ -94,15 +105,13 @@
             <span class="text-sm font-medium">担当営業</span>
             <input id="sales" type="text" placeholder="森川" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
           </label>
-          <div class="block">
-            <span class="text-sm font-medium">HubSpot 対象ID</span>
-            <div class="mt-1 flex gap-2">
-              <select id="hsType" class="rounded-lg border border-slate-300 px-2 py-2 bg-white">
-                <option value="deals">取引</option>
-                <option value="tickets">チケット</option>
-              </select>
-              <input id="hsId" type="text" inputmode="numeric" placeholder="11838525" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2">
+          <div class="block sm:col-span-2">
+            <span class="text-sm font-medium">HubSpot 紐づけ先</span>
+            <div class="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input id="hsDealId" type="text" inputmode="numeric" placeholder="取引ID（必須）例: 11838525" class="min-w-0 rounded-lg border border-slate-300 px-3 py-2">
+              <input id="hsCompanyId" type="text" inputmode="numeric" placeholder="会社ID（任意）" class="min-w-0 rounded-lg border border-slate-300 px-3 py-2">
             </div>
+            <p class="mt-1 text-xs text-slate-500">発注書は<b>新しいチケット</b>として作成され、ここで指定した<b>取引</b>と<b>会社</b>に紐づきます。会社IDを空にすると、取引に紐づく会社を自動で取得します。IDは、HubSpotのレコード画面のURL末尾の数字です。</p>
           </div>
         </div>
       </div>
@@ -121,9 +130,10 @@
       <div class="space-y-3">
         <button id="btnCopyConfirm" type="button" class="w-full rounded-lg bg-orange-500 px-4 py-3 font-bold text-white hover:bg-orange-600">🟠 営業への不足確認文をコピー</button>
         <button id="btnCopyOrder" type="button" class="w-full rounded-lg bg-slate-700 px-4 py-3 font-bold text-white hover:bg-slate-800">📋 発注書テキストをコピー</button>
-        <button id="btnHubSpot" type="button" class="w-full rounded-lg bg-blue-600 px-4 py-3 font-bold text-white hover:bg-blue-700 disabled:opacity-60">🚀 HubSpotへ転記</button>
+        <button id="btnHubSpot" type="button" class="w-full rounded-lg bg-blue-600 px-4 py-3 font-bold text-white hover:bg-blue-700 disabled:opacity-60">🎫 HubSpotにチケットを作成して転記</button>
       </div>
       <div id="apiError" class="hidden mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 whitespace-pre-wrap"></div>
+      <div id="apiResult" class="hidden mt-4 rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-800 whitespace-pre-wrap"></div>
     </div>
   </section>
 </main>
@@ -634,7 +644,7 @@
     product: $('product').value,
     client: $('client').value.trim() || MISSING,
     sales: $('sales').value.trim() || MISSING,
-    hsId: $('hsId').value.trim() || MISSING,
+    hsId: $('hsDealId').value.trim() || MISSING,
   });
 
   // nestひな形に入力内容を埋めたテキスト（HubSpot転記・コピー用）
@@ -673,7 +683,7 @@
       `- 商材: ${m.product}`,
       `- 顧客名: ${m.client}`,
       `- 担当営業: ${m.sales}`,
-      `- HubSpot ID: ${m.hsId}`,
+      `- HubSpot 取引ID: ${m.hsId}`,
       '',
     ];
     for (const f of FIELDS) {
@@ -708,7 +718,13 @@
     ].join('\n');
   }
 
-  /* ---------- ④ HubSpot API ---------- */
+  /* ---------- ④ HubSpot API（チケット作成＋取引・会社への関連付け） ---------- */
+  const HS_BASE = 'https://api.hubapi.com';
+  // HubSpot定義の関連付けタイプID（チケット→取引 / チケット→会社）
+  const ASSOC_TICKET_TO_DEAL = 28;
+  const ASSOC_TICKET_TO_COMPANY = 26;
+  let lastTicketId = '';
+
   function showApiError(msg) {
     const box = $('apiError');
     if (!msg) { box.classList.add('hidden'); box.textContent = ''; return; }
@@ -716,53 +732,100 @@
     box.classList.remove('hidden');
   }
 
+  function showApiResult(msg) {
+    const box = $('apiResult');
+    if (!msg) { box.classList.add('hidden'); box.textContent = ''; return; }
+    box.textContent = msg;
+    box.classList.remove('hidden');
+  }
+
+  async function hsRequest(path, token, init = {}) {
+    const res = await fetch(HS_BASE + path, {
+      ...init,
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    });
+    let json = null;
+    try { json = await res.json(); } catch { /* JSONでない応答 */ }
+    return { res, json };
+  }
+
+  const HS_HINTS = {
+    400: 'リクエストが不正です。プロパティ名（内部名）、パイプラインID・ステージIDが存在するか確認してください。',
+    401: 'トークンが無効または期限切れです。Private Appのトークンを確認してください。',
+    403: '権限不足です。Private Appのスコープ（tickets、取引・会社の読み取り/書き込み）を確認してください。',
+    404: '指定のIDのレコードが見つかりません。取引ID・会社IDを確認してください。',
+    429: 'APIのレート制限に達しました。少し待ってから再実行してください。',
+  };
+  function hsErrorText(step, res, json) {
+    const detail = json && json.message ? '\n詳細: ' + json.message : '';
+    return `${step}に失敗しました（HTTP ${res.status}）。\n${HS_HINTS[res.status] || 'HubSpot側でエラーが発生しました。'}${detail}`;
+  }
+
   async function sendToHubSpot() {
     showApiError('');
+    showApiResult('');
     const token = $('hsToken').value.trim();
-    const id = $('hsId').value.trim();
-    const type = $('hsType').value;
+    const dealId = $('hsDealId').value.trim();
+    let companyId = $('hsCompanyId').value.trim();
     const prop = $('hsProp').value.trim();
+    const pipeline = $('hsPipeline').value.trim();
+    const stage = $('hsStage').value.trim();
     if (!token) { $('hsSettings').open = true; showApiError('HubSpotのアクセストークンが未設定です。左カラム「2. HubSpot接続設定」で入力してください。'); return; }
-    if (!/^\d+$/.test(id)) { showApiError('HubSpot 対象IDは数字で入力してください（右カラム「制作発注書プレビュー」の基本情報）。'); return; }
-    if (!prop) { $('hsSettings').open = true; showApiError('転記先プロパティ名を入力してください。'); return; }
+    if (!/^\d+$/.test(dealId)) { showApiError('HubSpot 取引IDは数字で入力してください（右カラム「制作発注書プレビュー」の基本情報）。'); return; }
+    if (companyId && !/^\d+$/.test(companyId)) { showApiError('HubSpot 会社IDは数字で入力してください（空欄なら取引から自動取得します）。'); return; }
+    if (!prop || !pipeline || !stage) { $('hsSettings').open = true; showApiError('チケットのプロパティ名・パイプラインID・ステージIDを入力してください（左カラム「2. HubSpot接続設定」）。'); return; }
 
     const ready = requiredList().every(r => r.ok);
-    if (!ready && !confirm('未確定の必須項目があります。このまま転記しますか？')) return;
-    if (!confirm(`HubSpotの${type === 'deals' ? '取引' : 'チケット'} ${id} のプロパティ「${prop}」を、発注書の内容で上書きします。よろしいですか？`)) return;
+    if (!ready && !confirm('未確定の必須項目があります。このままチケットを作成しますか？')) return;
+    if (lastTicketId && !confirm(`このページですでにチケット（ID: ${lastTicketId}）を作成済みです。もう1枚作成しますか？`)) return;
+    if (!confirm(`チケットを新規作成し、取引 ${dealId} ${companyId ? `・会社 ${companyId}` : '・会社（取引から自動取得）'} に紐づけます。よろしいですか？`)) return;
 
     const btn = $('btnHubSpot');
     btn.disabled = true;
     btn.textContent = '送信中…';
     try {
-      const res = await fetch(`https://api.hubapi.com/crm/v3/objects/${type}/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ properties: { [prop]: buildOrderText() } }),
-      });
-      if (res.ok) { toast('✅ 転記完了'); return; }
-      let detail = '';
-      try { const j = await res.json(); detail = j.message || ''; } catch { /* JSONでない応答 */ }
-      const hints = {
-        400: 'リクエストが不正です。プロパティ名（内部名）が存在するか、型が文字列系か確認してください。',
-        401: 'トークンが無効または期限切れです。Private Appのトークンを確認してください。',
-        403: '権限不足です。Private Appのスコープ（crm.objects.deals.write など）を確認してください。',
-        404: '指定のIDのレコードが見つかりません。取引/チケットの種類とIDを確認してください。',
-        429: 'APIのレート制限に達しました。少し待ってから再実行してください。',
+      // 会社IDが空なら、取引に紐づく会社を取得する
+      if (!companyId) {
+        const a = await hsRequest(`/crm/v4/objects/deals/${encodeURIComponent(dealId)}/associations/companies`, token);
+        if (!a.res.ok) { showApiError(hsErrorText('取引に紐づく会社の取得', a.res, a.json)); toast('会社の取得に失敗しました', false); return; }
+        const first = a.json && a.json.results && a.json.results[0];
+        companyId = first ? String(first.toObjectId) : '';
+        if (!companyId) {
+          showApiError('この取引には会社が紐づいていません。HubSpotで取引に会社を関連付けるか、会社IDを入力してください。チケットは作成していません。');
+          toast('会社が見つかりません', false);
+          return;
+        }
+      }
+      const kind = isNest() ? '【nestの発注】' : '【制作発注】';
+      const body = {
+        properties: {
+          subject: `${kind}${$('client').value.trim() || '（顧客名未入力）'}`,
+          [prop]: buildOrderText(),
+          hs_pipeline: pipeline,
+          hs_pipeline_stage: stage,
+        },
+        associations: [
+          { to: { id: dealId }, types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: ASSOC_TICKET_TO_DEAL }] },
+          { to: { id: companyId }, types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: ASSOC_TICKET_TO_COMPANY }] },
+        ],
       };
-      showApiError(`HubSpotへの転記に失敗しました（HTTP ${res.status}）。\n${hints[res.status] || 'HubSpot側でエラーが発生しました。'}${detail ? '\n詳細: ' + detail : ''}`);
-      toast('転記に失敗しました', false);
+      const t = await hsRequest('/crm/v3/objects/tickets', token, { method: 'POST', body: JSON.stringify(body) });
+      if (!t.res.ok) { showApiError(hsErrorText('チケットの作成', t.res, t.json)); toast('チケットの作成に失敗しました', false); return; }
+      lastTicketId = t.json && t.json.id ? String(t.json.id) : '（ID不明）';
+      showApiResult(`チケット（ID: ${lastTicketId}）を作成し、取引 ${dealId}・会社 ${companyId} に紐づけました。`);
+      toast('✅ チケットを作成しました');
     } catch (err) {
       showApiError(
-        'HubSpotと通信できませんでした。\n' +
+        'HubSpotと通信できませんでした（チケットは作成されていません）。\n' +
         '・インターネット接続を確認してください。\n' +
         '・HubSpot APIはブラウザからの直接呼び出し（CORS）を拒否する場合があります。その場合は、' +
-        '「📋 発注書テキストをコピー」でHubSpotへ手動貼り付けしてください。\n' +
+        '「📋 発注書テキストをコピー」でHubSpotのチケットへ手動貼り付けしてください。\n' +
         '詳細: ' + (err && err.message ? err.message : err)
       );
       toast('通信に失敗しました', false);
     } finally {
       btn.disabled = false;
-      btn.textContent = '🚀 HubSpotへ転記';
+      btn.textContent = '🎫 HubSpotにチケットを作成して転記';
     }
   }
 
@@ -807,19 +870,19 @@
   }
 
   /* ---------- HubSpot設定の保存 ---------- */
-  const DEFAULT_PROP = { deals: 'description', tickets: 'content' };
+  // 入力欄id -> [LocalStorageのキー, 初期値]
+  const HS_SETTINGS = {
+    hsProp:     ['hsTicketProp', 'content'],
+    hsPipeline: ['hsPipeline', '0'],
+    hsStage:    ['hsStage', '1'],
+  };
   function initHubSpotSettings() {
     const savedToken = lsGet('hsToken');
     if (savedToken) { $('hsToken').value = savedToken; $('hsRemember').checked = true; }
-    $('hsType').value = lsGet('hsType') || 'deals';
-    $('hsProp').value = lsGet('hsProp') || DEFAULT_PROP[$('hsType').value];
-    let propEdited = !!lsGet('hsProp');
-
-    $('hsProp').addEventListener('input', () => { propEdited = true; lsSet('hsProp', $('hsProp').value.trim()); });
-    $('hsType').addEventListener('change', () => {
-      lsSet('hsType', $('hsType').value);
-      if (!propEdited) $('hsProp').value = DEFAULT_PROP[$('hsType').value];
-    });
+    for (const [id, [key, def]] of Object.entries(HS_SETTINGS)) {
+      $(id).value = lsGet(key) || def;
+      $(id).addEventListener('input', () => lsSet(key, $(id).value.trim()));
+    }
     const saveToken = () => {
       if ($('hsRemember').checked) lsSet('hsToken', $('hsToken').value.trim()); else lsDel('hsToken');
     };
