@@ -351,6 +351,7 @@
   const nestLabel = (f) => f.label || f.out.replace(/^[■・＜【]+/, '').replace(/[：；＞】]+$/, '');
 
   const MISSING = '未確定（要確認）';
+  const defaultIds = new Set(['freq', 'mt_igpw']);   // 既定値のまま（手入力ではない）の欄。解析で上書きしてよい
   const values = { freq: '半年', mt_igpw: 'ヒアリング' };   // 全フィールドの値（商材切替でも保持）。初期値は既定値
   const autoFilled = new Set(); // 自動抽出された（未編集の）フィールド
   const els = {};               // id -> { ta, badge, auto, star, warn, f }
@@ -417,7 +418,18 @@
       t = t.trim();
       if (t) out.push({ speaker, text: t });
     }
-    return out;
+    // Zoomの字幕は1文の途中で区切られることがある。句点で終わる字幕が多い文字起こしでは、
+    // 句点で終わらない字幕を、同じ話者の次の字幕とつないで1文に戻す
+    const endsSentence = (x) => /[。！？!?]$/.test(x.text);
+    if (out.length && out.filter(endsSentence).length / out.length < 0.4) return out;
+    const merged = [];
+    for (const u of out) {
+      const prev = merged[merged.length - 1];
+      // 話者がある字幕だけをつなぐ（話者の無い行やURLを含む行は、つなげるとURLなどが壊れるので別々のまま）
+      if (prev && u.speaker && prev.speaker === u.speaker && !endsSentence(prev) && !/https?:\/\//.test(prev.text + u.text)) prev.text += u.text;
+      else merged.push({ ...u });
+    }
+    return merged;
   }
 
   const speakerRoles = {};   // 話者名 -> 'sales' | 'customer'
@@ -501,7 +513,11 @@
     utts.forEach((u, i) => {
       if (i > 0 && roleOf(u.speaker) === 'customer' && isAgreement(u.text) && roleOf(utts[i - 1].speaker) === 'sales') agreed.add(i - 1);
     });
-    return utts.flatMap((u, i) => splitSentences(u.text).map(s => ({ s, role: roleOf(u.speaker), agreed: agreed.has(i) })));
+    return utts.flatMap((u, i) => {
+      const sents = splitSentences(u.text);
+      // 長い発言のうち、返事を受けたのは最後の文（確認・提案の文）
+      return sents.map((s, k) => ({ s, role: roleOf(u.speaker), agreed: agreed.has(i) && k === sents.length - 1 }));
+    });
   }
   const rank = (arr, preferRe) => (preferRe ? [...arr.filter(s => preferRe.test(s)), ...arr.filter(s => !preferRe.test(s))] : arr);
 
@@ -513,16 +529,19 @@
   // 話し言葉を、発注書に載せて意味が通る言い切りの文に整える（ルール処理のみ。AIは使わない）
   //   例: 「えーと、ターゲットは学生さんですよね。」→「ターゲットは学生さんです。」
   //       「ホームページを新しくしたいとのことでしたね。」→「ホームページを新しくしたい。」
-  const FILLER_HEAD_RE = /^(?:えっと|えーと|ええと|えー|あのー|あの|まあ|なんか|そうですね|そうなんですよ|いいえ|いえ|いや|はい|ええ|それで|で|じゃあ|では)[、,，\s]+/;
+  const FILLER_HEAD_RE = /^(?:えっと|えーと|ええと|えー|あのー|あの|まあ|なんか|そうですね|そうなんですよ|いいえ|いえ|いや|はい|ええ|それで|で|じゃあ|では|あとは|あと|それと|それから|ちなみに|そして|また|ただし|ただ)[、,，\s]+/;
   function tidySentence(s0) {
     let s = s0.trim();
     for (let i = 0; i < 3 && FILLER_HEAD_RE.test(s); i++) s = s.replace(FILLER_HEAD_RE, '');
+    s = s.replace(/^(?:では|じゃあ)(?!ない|なく|あり)/, '');   // 「ではスマホで…」の文頭の接続語
+    s = s.replace(/^(?:うち|当店|弊店|こちら)は[、,，]?/, '');         // 「うちは京都で30年…」→「京都で30年…」（書き言葉に）
     s = s.replace(/(?:とのこと|ということ)(?:で(?:した|す)|でしょう|でよろしい|でいい)(?:ね|よね|か|でしょうか|ですか)?[。！？!?]*$/, '。');
     s = s.replace(/でよろしい(?:でしょうか|ですか)[。？?]*$/, 'です。');
-    s = s.replace(/で?いかがでしょうか[。？?]*$/, 'です。');
+    s = s.replace(/(?:は|で)?(?:いかが|どう)(?:でしょうか|ですか)[。？?]*$/, 'です。');   // 「雰囲気はいかがでしょうか」→「雰囲気です」
     s = s.replace(/(ですよね|ますよね|でしたよね|ましたよね)[。！？!?]*$/, (m, a) => a.replace('よね', '') + '。');
     s = s.replace(/(です|ます|でした|ました)(?:ね|よ)[。！!]*$/, '$1。');
     s = s.replace(/(?:でしょうか|ですかね|でしょうかね|ですか)[。？?]*$/, 'です。');
+    s = s.replace(/な?んです([。！!]*)$/, 'です$1');                      // 「見づらいんです」→「見づらいです」
     s = s.replace(/[？?]+$/, '。').replace(/[。！!]{2,}$/, '。').replace(/\s{2,}/g, ' ').trim();
     return /[。！!]$/.test(s) ? s : s + '。';
   }
@@ -559,12 +578,15 @@
   const OVERVIEW_RE = /(目的|課題|困って|悩み|リニューアル|新規(?:制作|作成)|制作したい|作りたい|作成したい|したいと|やりたい|増やしたい|ホームページ|サイト|LP|ランディング|バナー|集客|問い合わせ|予約|売上|認知|ご依頼)/;
   const extractOverview = (sl) => pickBy(sl, OVERVIEW_RE, /(目的|課題|困って|悩み|したい|リニューアル|作りたい)/, 3).join('\n');
 
-  const TARGET_RE = /(ターゲット|想定(?:ユーザー|顧客|読者)|ユーザー層|顧客層|利用者|対象(?:者|層)|\d{1,2}代|世代|経営者|主婦|学生|シニア|ファミリー|ペルソナ)/;
+  const TARGET_RE = /(ターゲット|想定(?:ユーザー|顧客|読者)|ユーザー層|顧客層|利用者|対象(?:者|層)|\d{1,2}代|世代|経営者|主婦|学生|シニア|ファミリー|ペルソナ|(?:女性|男性)(?:の(?:お客様|お客さん|方|客)|が(?:多|中心)|向け|層)|(?:お客様|お客さん|来店(?:者|客)|利用者)[^。]{0,12}(?:中心|多い|多く))/;
   const extractTarget = (sl) => pickBy(sl, TARGET_RE, /(ターゲット|ペルソナ|想定)/, 3).join('\n');
 
   const TONE_WORDS = ['シンプル', '高級感', 'ポップ', '清潔感', '信頼感', '誠実', '落ち着いた', 'モダン', '明るい', '温かい', 'やわらかい',
     'スタイリッシュ', 'かっこいい', '親しみやすい', '先進的', 'ナチュラル', '高級', 'カジュアル', 'クール', '上品', '重厚感', '洗練',
     'おしゃれ', 'かわいい', '可愛い', '和風', '華やか'];
+  // 色の希望。「面白い」「空白」などの一部に含まれる漢字は除く（漢字1字の色は、前が漢字でなく、後ろが助詞・「色」「系」「ベース」のときだけ）
+  const COLOR_RE = /(?<![一-龥])(?:青|赤|緑|黄|紫|白|黒|紺)(?=[とやがはを、色系い]|ベース|っぽい)(?:色|系|ベース)?|ピンク|オレンジ|ネイビー|ブルー|レッド|グリーン|イエロー|ベージュ|ゴールド|シルバー|グレー|パステル/g;
+  const COLOR_CUE_RE = /(好き|したい|がいい|が良い|いいです|お願い|イメージ|基調|ベース|系|色|カラー|配色|デザイン|雰囲気|感じ|希望|使い)/;
   // トンマナはお客様の発言と、お客様が了承した営業の提案から拾う（了承されていない営業の提案語は拾わない）。
   // お客様の発言が無い場合のみ全体から探す
   function extractTone(sl) {
@@ -572,7 +594,8 @@
     const base = (own.length ? own : sl).map(x => x.s).join('\n');
     const found = TONE_WORDS.filter(w => base.includes(w));
     const words = found.filter(w => !found.some(o => o !== w && o.includes(w)));   // 「高級感」があれば「高級」は省く
-    const colors = uniq([...base.matchAll(/(青|赤|緑|黄|オレンジ|ピンク|紫|白|黒|紺|ネイビー|グレー|ブルー|レッド|グリーン)(?:ベース|系|色|を基調)/g)].map(m => m[0]));
+    const colorText = (own.length ? own : sl).map(x => x.s).filter(t => COLOR_CUE_RE.test(t)).join('\n');   // 色は希望を言っている文からだけ拾う
+    const colors = uniq([...colorText.matchAll(COLOR_RE)].map(m => m[0]));
     const kw = uniq([...words, ...colors]);
     const ctx = pickBy(sl, /(トンマナ|雰囲気|テイスト|イメージ|カラー|配色|デザイン)/, null, 2, { salesFallback: false });
     if (!kw.length && !ctx.length) return '';
@@ -696,7 +719,17 @@
   // nest用の抽出。認証情報（メール・パスワード）は音声の聞き違いが多く機微のため抽出しない
   const TROUBLE_RE = /(困って|課題|悩み|できていない|できてい|わからない|分からない|手が回|人手|集客|求人|放置|更新でき|不足|口コミ[^。]*(?:ない|少な|無い))/;
   const STRENGTH_RE = /(強み|売り|特徴|こだわり|高評価|評価|創業|実績|人気|看板|得意)/;
-  const BUSINESS_RE = /(創業|運営|取り扱|販売|製造|施工|提供|事業|サービス)/;
+  const BUSINESS_RE = /(創業|運営|取り扱|販売|製造|施工|提供|事業|サービス|やって(?:い)?る|営んで|経営|開業|(?:店|屋|業|院|サロン)(?:です|をしています|をやって))/;
+  // 業種（「京都で30年やっている洋菓子店」「うちは美容室です」）
+  const BIZ_NOUN = '[^\\s、。]{1,12}(?:店|屋|業|院|サロン|教室|工務店|クリニック|歯科|美容室|食堂|カフェ|ホテル|旅館|工房|会社)';
+  const INDUSTRY_RES = [
+    new RegExp(`(?:やって(?:い)?る|営んで(?:い)?る|経営(?:して(?:い)?る)?|運営(?:して(?:い)?る)?)(?:の)?(${BIZ_NOUN})`),
+    new RegExp(`(?:うち|当店|弊店|当社|こちら)は(${BIZ_NOUN})(?:です|を|で)`),
+  ];
+  // 住所・営業時間などの語尾（「〜でよろしいでしょうか」「〜ですよね」）を除く
+  const trimTail = (t) => t.replace(/(?:で(?:よろしい|いい|間違いない|間違いありません|合って)[^\s、。]*|でしょうか|ですか|ですよね|ですね|です|ます|になります|だと思います|と思います)$/, '');
+  const isQuestion = (t) => /(ですか|ますか|でしょうか|ませんか|[？?])[。]?$/.test(t);
+  const SNS_NONE_RE = /(やって(?:い)?ない|やって(?:い)?ません|使って(?:い)?ない|使って(?:い)?ません|アカウント(?:は)?(?:ない|なし)|持って(?:い)?ない|持って(?:い)?ません)/;
   const PHONE_RE = /0\d{1,4}-\d{1,4}-\d{3,4}/;
   const NON_SITE_RE = /(tabelog|hotpepper|ekiten|itp\.ne\.jp|retty|gnavi|youtube|zoom\.us)/;
 
@@ -711,7 +744,16 @@
     res.trouble = pickBy(sl.filter(x => TROUBLE_RE.test(x.s)), TROUBLE_RE, /(困|課題|悩み)/, 4).join('\n');
     const business = pickBy(nonTrouble, BUSINESS_RE, /(創業|事業|取り扱)/, 3);
     res.business = business.join('\n');
-    res.strength = pickBy(nonTrouble, STRENGTH_RE, /(強み|売り|特徴)/, 4).filter(x => !business.includes(x)).join('\n');
+    const strengthAll = pickBy(nonTrouble, STRENGTH_RE, /(強み|売り|特徴)/, 4);
+    const strengthOnly = strengthAll.filter(x => !business.includes(x));
+    res.strength = (strengthOnly.length ? strengthOnly : strengthAll).join('\n');   // 事業内容と同じ文でも、強みが空になるよりは重ねて載せる
+
+    // お客様の発言を先にして文を探す（営業の確認の質問は答えではない）
+    const mentions = (re) => sl.filter(x => re.test(x.s)).sort((a, b) => (a.role === 'sales') - (b.role === 'sales')).map(x => x.s);
+    for (const re of INDUSTRY_RES) {
+      const hit = mentions(/./).map(t => t.match(re)).find(Boolean);
+      if (hit && !res.industry) res.industry = hit[1];
+    }
 
     const phone = text.match(PHONE_RE);
     if (phone) res.store_tel = phone[0];
@@ -719,10 +761,10 @@
     const zip = noPhone.match(/〒?\s*(\d{3})-(\d{4})/);
     if (zip) res.store_zip = `〒${zip[1]}-${zip[2]}`;
     const addr = noPhone.match(/(?:北海道|東京都|京都府|大阪府|[^\s、。]{2,3}県)[^\s、。]{2,40}/);
-    if (addr) res.store_addr = addr[0];
+    if (addr) res.store_addr = trimTail(addr[0]);
     const hours = noPhone.match(/(?:\d{1,2}[:：]\d{2}|\d{1,2}時(?:\d{1,2}分)?)\s*(?:〜|～|~|-|－|ー|から)\s*(?:\d{1,2}[:：]\d{2}|\d{1,2}時(?:\d{1,2}分)?)/);
     const closed = text.match(/定休日?(?:は|:|：)?\s*([^\s。、]{1,8})/);
-    if (hours) res.store_hours = hours[0] + (closed ? ` 定休:${closed[1].replace(/(です|ます|になります)$/, '')}` : '');
+    if (hours) res.store_hours = hours[0].replace(/\s*(?:から|～|~|-|－|ー)\s*/, '〜') + (closed ? ` 定休:${trimTail(closed[1])}` : '');
 
     const urls = (text.match(/https?:\/\/[^\s<>"'）)」』、。，]+/g) || []).map(u => u.replace(/[.,;:!?]+$/, ''));
     for (const u of urls) {
@@ -733,6 +775,18 @@
       else if (!res.site_url && !NON_SITE_RE.test(u)) res.site_url = u;
     }
 
+    // 「Facebookはやっていない」などは「なし」。有無の言及が無ければ空のまま（URLがあれば上のループで「あり」）
+    for (const [pre, re] of [['fb', /(Facebook|フェイスブック)/i], ['ig', /(Instagram|インスタ)/i], ['x', /(Twitter|ツイッター|(?<![A-Za-z])X(?![A-Za-z]))/]]) {
+      if (res[pre + '_has']) continue;
+      if (mentions(re).some(t => SNS_NONE_RE.test(t))) res[pre + '_has'] = 'なし';
+    }
+    // GBPのオーナー権限（営業の確認の質問は答えとしない）
+    const ownerSent = mentions(/オーナー/).find(t => !isQuestion(t) && /(ない|なし|わからな|不明|ません|あり|持って|私|自分|管理|です)/.test(t));
+    if (ownerSent) res.gbp_owner = /(ない|なし|わからな|不明|持って(?:い)?ません)/.test(ownerSent) ? 'なし' : 'あり';
+    // 公式LINEの登録状況
+    const lineSent = mentions(/(公式LINE|LINE公式)/).find(t => /(登録|友だち|友達|追加)/.test(t) && !isQuestion(t));
+    if (lineSent) res.line_reg = /(済|しました|いただきました|もらいました|すでに|もう)/.test(lineSent) ? '登録済み' : '未';
+
     // 更新頻度は言及があれば上書き。無ければ既定値（半年）のまま
     const freqSent = sents.find(s => /(更新|頻度|プロンプト)/.test(s) && /(毎月|半年|一年|1年|年に?1回)/.test(s));
     if (freqSent) res.freq = /毎月/.test(freqSent) ? '毎月' : /半年/.test(freqSent) ? '半年' : '一年';
@@ -741,6 +795,17 @@
 
   /* ---------- フォーム描画 ---------- */
   const isNest = () => $('product').value === 'nest';
+
+  // 複数行の欄を内容の行数に合わせて広げる（非表示などで高さが測れないときは何もしない）
+  function autosize(el) {
+    if (el.tagName !== 'TEXTAREA' || !el.scrollHeight) return;
+    el.style.height = 'auto';
+    // box-sizing（border-box / content-box）と余白・枠線に左右されず、内容がちょうど収まる高さにする
+    const cs = getComputedStyle(el);
+    const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const border = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+    el.style.height = (cs.boxSizing === 'border-box' ? el.scrollHeight + border : el.scrollHeight - pad) + 'px';
+  }
   const isRaqmo = () => $('product').value === 'RAQMO';
 
   function makeField(f) {
@@ -784,6 +849,8 @@
     const onInput = () => {
       values[f.id] = ta.value;
       autoFilled.delete(f.id);
+      defaultIds.delete(f.id);
+      autosize(ta);
       refreshAll();
     };
     ta.addEventListener('input', onInput);
@@ -1154,6 +1221,7 @@
     for (const [id, found1] of Object.entries(found)) {
       let v = found1;
       if (!v) continue;           // 検出なしは既存入力を保持
+      if (filled(id) && !autoFilled.has(id) && !defaultIds.has(id)) continue;   // 手入力済みの欄は上書きしない
       if (lockedIds.has(id) && filled(id)) {
         // 起動時に貼ったURLは上書きしない。参考URLの欄だけ、文字起こしのURLを追記する
         if (id !== 'urls') continue;
@@ -1162,7 +1230,7 @@
       }
       values[id] = v;
       autoFilled.add(id);
-      if (els[id]) els[id].ta.value = v;
+      if (els[id]) { els[id].ta.value = v; autosize(els[id].ta); }
       n++;
     }
     if (client && !$('client').value.trim()) {
@@ -1302,7 +1370,7 @@
       values[id] = v;
       autoFilled.add(id);
       lockedIds.add(id);
-      if (els[id]) els[id].ta.value = v;
+      if (els[id]) { els[id].ta.value = v; autosize(els[id].ta); }
       n++;
     }
     return { n, skipped };
