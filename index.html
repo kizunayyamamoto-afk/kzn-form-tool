@@ -19,6 +19,19 @@
   </div>
 </header>
 
+<!-- ===================== 起動時：商材の選択 ===================== -->
+<div id="startScreen" class="fixed inset-0 z-40 flex items-center justify-center bg-slate-50 p-6">
+  <div class="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+    <h2 class="text-xl font-bold">今回の案件はどちらですか？</h2>
+    <p class="mt-2 text-sm text-slate-500">選ぶと発注書の作成画面が開きます。Zoomの文字起こし（.vtt / .txt）を入れる（または貼り付ける）と、自動で項目を埋めます。</p>
+    <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <button type="button" data-product="nest" class="rounded-xl bg-blue-600 px-6 py-6 text-lg font-bold text-white hover:bg-blue-700">nest</button>
+      <button type="button" data-product="RAQMO" class="rounded-xl bg-indigo-600 px-6 py-6 text-lg font-bold text-white hover:bg-indigo-700">RAQMO<span class="block text-xs font-normal">制作発注</span></button>
+    </div>
+    <button type="button" data-product="その他" class="mt-4 text-xs text-slate-500 underline">その他の案件</button>
+  </div>
+</div>
+
 <main class="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
 
   <!-- ===================== 左カラム：商談入力 ===================== -->
@@ -26,7 +39,7 @@
 
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
       <h2 class="font-bold mb-1">1. Zoom文字起こし入力！！</h2>
-      <p class="text-xs text-slate-500 mb-3">テキストを貼り付けるか、.vtt / .txt ファイルをここにドラッグ＆ドロップしてください。</p>
+      <p class="text-xs text-slate-500 mb-3">テキストを貼り付けるか、.vtt / .txt ファイルをここにドラッグ＆ドロップしてください。貼り付け・読み込みと同時に自動で解析して、右の発注書プレビューを埋めます。</p>
       <div id="dropzone" class="rounded-lg">
         <textarea id="transcript" rows="12" placeholder="ここに文字起こしを貼り付け、または .vtt / .txt をドロップ"
           class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"></textarea>
@@ -36,8 +49,14 @@
           ファイルを選択
           <input id="fileInput" type="file" accept=".vtt,.txt,text/plain,text/vtt" class="hidden">
         </label>
+        <button id="btnClipboard" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">📋 クリップボードから取り込む</button>
         <button id="btnClean" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">タイムスタンプ・話者名を除去</button>
         <span id="cleanStat" class="text-xs text-slate-500"></span>
+      </div>
+      <div id="speakerWrap" class="hidden mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <h3 class="text-sm font-bold">話者の役割</h3>
+        <p class="mb-2 text-xs text-slate-500">お客様の発言を優先して項目を埋めます。判定が違う場合は変更して、「自動解析」を押し直してください。</p>
+        <div id="speakerRoles" class="space-y-1"></div>
       </div>
       <button id="btnAnalyze" type="button"
         class="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 font-bold text-white hover:bg-blue-700">🚀 発注書ドラフトを自動解析・生成</button>
@@ -57,11 +76,22 @@
           このブラウザのLocalStorageに保存する（共有PCでは非推奨）
         </label>
         <label class="block">
-          <span class="text-sm font-medium">転記先プロパティ名（内部名）</span>
+          <span class="text-sm font-medium">発注書を入れるチケットのプロパティ名（内部名）</span>
           <input id="hsProp" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm">
-          <span class="text-xs text-slate-500">取引の標準: description ／ チケットの標準: content ／ 社内カスタムプロパティも指定可（既存の値は上書きされます）</span>
+          <span class="text-xs text-slate-500">チケット本文の標準: content ／ 社内カスタムプロパティも指定可</span>
         </label>
-        <p class="text-xs text-slate-500">必要スコープ: crm.objects.deals.write（取引）/ tickets（チケット）。トークンは HubSpot の API 以外には送信しません。</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <label class="block">
+            <span class="text-sm font-medium">パイプラインID</span>
+            <input id="hsPipeline" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm">
+          </label>
+          <label class="block">
+            <span class="text-sm font-medium">ステージID</span>
+            <input id="hsStage" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm">
+          </label>
+        </div>
+        <p class="text-xs text-slate-500">チケットの作成にはパイプラインとステージが必須です。標準のサポートパイプライン「0」・ステージ「新規」の「1」が初期値です。社内で変更している場合はHubSpotの設定に合わせてください。</p>
+        <p class="text-xs text-slate-500">必要スコープ: tickets（チケットの作成）、取引・会社の読み取り/書き込み（関連付けと会社の自動取得）。不足している場合はエラー（403）で案内します。トークンは HubSpot の API 以外には送信しません。</p>
         <button id="btnClearToken" type="button" class="text-xs text-red-600 underline">保存済みトークンを削除</button>
       </div>
     </details>
@@ -88,21 +118,20 @@
           </label>
           <label class="block">
             <span class="text-sm font-medium">顧客名（会社名）</span>
+            <span id="clientAuto" class="hidden rounded bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700">自動抽出・要目視確認</span>
             <input id="client" type="text" placeholder="株式会社○○" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
           </label>
           <label class="block">
             <span class="text-sm font-medium">担当営業</span>
             <input id="sales" type="text" placeholder="森川" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
           </label>
-          <div class="block">
-            <span class="text-sm font-medium">HubSpot 対象ID</span>
-            <div class="mt-1 flex gap-2">
-              <select id="hsType" class="rounded-lg border border-slate-300 px-2 py-2 bg-white">
-                <option value="deals">取引</option>
-                <option value="tickets">チケット</option>
-              </select>
-              <input id="hsId" type="text" inputmode="numeric" placeholder="11838525" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2">
+          <div class="block sm:col-span-2">
+            <span class="text-sm font-medium">HubSpot 紐づけ先</span>
+            <div class="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input id="hsDealId" type="text" inputmode="numeric" placeholder="取引ID（必須）例: 11838525" class="min-w-0 rounded-lg border border-slate-300 px-3 py-2">
+              <input id="hsCompanyId" type="text" inputmode="numeric" placeholder="会社ID（任意）" class="min-w-0 rounded-lg border border-slate-300 px-3 py-2">
             </div>
+            <p class="mt-1 text-xs text-slate-500">発注書は<b>新しいチケット</b>として作成され、ここで指定した<b>取引</b>と<b>会社</b>に紐づきます。会社IDを空にすると、取引に紐づく会社を自動で取得します。IDは、HubSpotのレコード画面のURL末尾の数字です。</p>
           </div>
         </div>
       </div>
@@ -121,9 +150,10 @@
       <div class="space-y-3">
         <button id="btnCopyConfirm" type="button" class="w-full rounded-lg bg-orange-500 px-4 py-3 font-bold text-white hover:bg-orange-600">🟠 営業への不足確認文をコピー</button>
         <button id="btnCopyOrder" type="button" class="w-full rounded-lg bg-slate-700 px-4 py-3 font-bold text-white hover:bg-slate-800">📋 発注書テキストをコピー</button>
-        <button id="btnHubSpot" type="button" class="w-full rounded-lg bg-blue-600 px-4 py-3 font-bold text-white hover:bg-blue-700 disabled:opacity-60">🚀 HubSpotへ転記</button>
+        <button id="btnHubSpot" type="button" class="w-full rounded-lg bg-blue-600 px-4 py-3 font-bold text-white hover:bg-blue-700 disabled:opacity-60">🎫 HubSpotにチケットを作成して転記</button>
       </div>
       <div id="apiError" class="hidden mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 whitespace-pre-wrap"></div>
+      <div id="apiResult" class="hidden mt-4 rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-800 whitespace-pre-wrap"></div>
     </div>
   </section>
 </main>
@@ -162,7 +192,7 @@
   //   items: 入力項目 { id, out(ひな形の見出し), type, req, label, ph, hint, colonless, warn } か、固定行 { text }
   //   type : 'line'(1行) / 'area'(複数行) / 'choice'(選択式・opts)
   //   req  : そのセクションが「対象」のとき必須
-  //   when : セクションが対象になる条件（NEST_ACTIVE のキー）。対象外でも入力は任意
+  //   when : セクションが対象になる条件（ACTIVE_WHEN のキー）。対象外でも入力は任意
   // 認証情報（メール・パスワード）は文字起こしから自動抽出しない。
   const MARK_PH = '●（個数・販促期間などの詳細も追記）';
   const PW_HINT = 'お客様が明言した場合のみ入力（不明は「ヒアリング」）。発注書とHubSpotに平文で転記されます';
@@ -204,7 +234,8 @@
       { id: 'login_email', out: '■ログインに必要なお客様希望メールアドレス：', type: 'line',
         hint: '契約時に確認する場合は「契約時に確認予定」' },
       { id: 'login_pw', out: '■ログインに必要なお客様希望パスワード：', type: 'line', hint: '半角英数字8文字以上。' + PW_HINT, warn: checkPassword },
-      { id: 'freq', out: '■コンサルティングデータプロンプトの更新頻度希望：', type: 'choice', opts: FREQ_OPTIONS, req: true },
+      { id: 'freq', out: '■コンサルティングデータプロンプトの更新頻度希望：', type: 'choice', opts: FREQ_OPTIONS, req: true,
+        hint: '言及がなければ「半年」（デフォルト）' },
       { id: 'site_url', out: '■登録希望WebサイトURL：', type: 'line',
         hint: 'お客様がお持ちのWebサイトURL（食べログ等の情報サイトは不可）。KIZUNA以外も記載。Webサイト無しの場合は空欄可' },
       { id: 'line_reg', out: '■nest公式LINEを登録いただいているか：', type: 'line', req: true, ph: '例: 登録済み／未／○月○日回収時に登録' },
@@ -271,19 +302,53 @@
   const PRODUCT_IDS = ['p_full', 'p_brain', 'p_auto', 'p_review', 'p_aio', 'p_raqmo_aio', 'p_raqmo_noaio',
     'p_moel', 'p_scumo', 'p_base', 'p_reserva', 'p_other'];
   // セクションが「対象」になる条件
-  const NEST_ACTIVE = {
+  const ACTIVE_WHEN = {
     always: () => true,
     auto:   () => filled('p_full') || filled('p_auto'),
     aio:    () => filled('p_full') || filled('p_aio'),
     raqmo:  () => filled('p_raqmo_aio'),
+    meeto:  () => filled('pr_meeto'),
+    moel:   () => filled('pr_moel'),
+    mofl:   () => filled('pr_mofl'),
   };
+
+  // RAQMO(制作発注)で販促としてつく商品（MEETO / MOEL / MOFUL）。●の商品だけ詳細欄が必須になる
+  const RAQMO_PW_HINT = '原則「ヒアリング」と記入。発注書とHubSpotに平文で転記されます';
+  const PROMO_SECTIONS = [
+    { id: 'promo', head: '■受注・販促商品（販促）', when: 'always',
+      note: '販促としてつく商品に●。個数・販促期間などの詳細も追記してください。', items: [
+      { id: 'pr_meeto', out: 'MEETO（GBP/IG連携）：', type: 'line', ph: MARK_PH },
+      { id: 'pr_moel',  out: 'LO（MOEL)：',           type: 'line', ph: MARK_PH },
+      { id: 'pr_mofl',  out: 'MOFUL（SNS代行）：',    type: 'line', ph: MARK_PH },
+    ] },
+    { id: 'meeto', head: '■MEETO', when: 'meeto', offNote: 'MEETOに●があるとき必要', items: [
+      { id: 'mt_kw',     out: '・検索キーワード：', type: 'area', rows: 2, req: true, hint: '営業時に話したキーワードをすべて記載' },
+      { id: 'mt_item',   out: '・商品登録希望/内容：', type: 'area', rows: 2 },
+      { id: 'mt_report', out: '・レポート提出有無：', type: 'line', req: true, ph: 'あり／なし' },
+      { id: 'mt_ig',     out: '・インスタアカウント有無：', type: 'line', req: true, ph: 'あり／なし' },
+      { id: 'mt_igname', out: 'アカウント名：', label: 'MEETO インスタ アカウント名', type: 'line' },
+      { id: 'mt_igpw',   out: 'パスワード：', label: 'MEETO インスタ パスワード', type: 'line', hint: RAQMO_PW_HINT },
+    ] },
+    { id: 'moel', head: '■MOEL', when: 'moel', offNote: 'MOELに●があるとき必要', items: [
+      { id: 'ml_has',  out: '・LOアカウント有無：', type: 'line', req: true, ph: 'あり／なし（新規作成）' },
+      { id: 'ml_name', out: '・新規作成LO名：', type: 'line' },
+      { id: 'ml_menu', out: '・リッチメニュー希望項目：', type: 'area', rows: 2, req: true, hint: '例: 電話ボタン・Instagramは絶対欲しい／アクセスはいらない など' },
+      { id: 'ml_plan', out: '・LO活用提案内容：', type: 'area', rows: 2 },
+      { id: 'ml_msg',  out: '・リッチメセージ作成有無：', label: 'リッチメッセージ作成有無', type: 'line', req: true, ph: 'あり／なし（契約の配信回数があれば詳細も）' },
+    ] },
+    { id: 'mofl', head: '■MOFUL', when: 'mofl', offNote: 'MOFULに●があるとき必要', items: [
+      { id: 'mf_count', out: '・月間配信回数：', type: 'line', req: true, ph: '例: 月1回（半年）' },
+      { id: 'mf_sns',   out: '・配信SNS：', type: 'line', req: true, ph: '例: Instagram' },
+      { id: 'mf_why',   out: '提案内容（販促でつけた経緯）：', type: 'area', rows: 2 },
+    ] },
+  ];
   const nestLabel = (f) => f.label || f.out.replace(/^[■・＜【]+/, '').replace(/[：；＞】]+$/, '');
 
   const MISSING = '未確定（要確認）';
-  const values = {};            // 全フィールドの値（商材切替でも保持）
+  const values = { freq: '半年', mt_igpw: 'ヒアリング' };   // 全フィールドの値（商材切替でも保持）。初期値は既定値
   const autoFilled = new Set(); // 自動抽出された（未編集の）フィールド
   const els = {};               // id -> { ta, badge, auto, star, warn, f }
-  const nestSecEls = {};        // nestセクションid -> { sec, note }
+  const secEls = {};            // セクションid -> { sec, note }
 
   /* ---------- ユーティリティ ---------- */
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -317,10 +382,15 @@
     }
   }
 
-  /* ---------- ① テキストクリーニング ---------- */
-  function cleanTranscript(raw) {
+  /* ---------- ① 文字起こしの解析（話者つき） ---------- */
+  // 話者ラベル「山田 太郎: 」。URL(https:)と時刻(10:00)は話者として扱わない
+  const SPEAKER_RE = /^(?!https?:)([^\s:：「」。、]{1,20}(?:[ 　][^\s:：「」。、]{1,20}){0,2})\s*[:：](?!\/\/)(?!\d)\s*/;
+
+  // Zoomの .vtt / .txt から、話者つきの発言リストを作る（タイムスタンプ・キュー番号・タグは除去）
+  function parseUtterances(raw) {
     const lines = raw.replace(/\r\n?/g, '\n').replace(/^﻿/, '').split('\n');
     const out = [];
+    let speaker = '';
     let inNote = false;
     for (const line of lines) {
       let t = line.trim();
@@ -330,15 +400,76 @@
       if (inNote) continue;
       if (/^\d+$/.test(t)) continue;                       // VTTのキュー番号
       if (/-->/.test(t)) continue;                         // 00:12:34.000 --> 00:12:38.000
-      if (/^\[[^\]]+\]\s*\d{1,2}:\d{2}(:\d{2})?(\.\d+)?$/.test(t)) continue; // [山田 太郎] 00:01:02
-      t = t.replace(/<[^>]+>/g, '');                       // <v 山田 太郎> 等のVTTタグ
-      t = t.replace(/^\[?\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?\]?\s+/, ''); // 行頭のタイムスタンプ
-      // 話者ラベル「山田 太郎: 」（URLの https: は除外）
-      t = t.replace(/^(?!https?:)[^\s:：「」。、]{1,20}(?:[ 　][^\s:：「」。、]{1,20}){0,2}\s*[:：](?!\/\/)\s*/, '');
+      const head = t.match(/^\[([^\]]+)\]\s*\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?$/);   // [山田 太郎] 00:01:02
+      if (head) { speaker = head[1].trim(); continue; }
+      const tag = t.match(/^<v(?:\.[^\s>]+)?\s+([^>]+)>/);                       // <v 山田 太郎>
+      if (tag) speaker = tag[1].trim();
+      t = t.replace(/<[^>]+>/g, '');
+      t = t.replace(/^\[?\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?\]?\s+/, '');              // 行頭のタイムスタンプ
+      const label = t.match(SPEAKER_RE);
+      if (label) { speaker = label[1].trim(); t = t.slice(label[0].length); }
       t = t.trim();
-      if (t) out.push(t);
+      if (t) out.push({ speaker, text: t });
     }
-    return out.join('\n');
+    return out;
+  }
+
+  const speakerRoles = {};   // 話者名 -> 'sales' | 'customer'
+  let utterances = [];       // 直近の解析対象（話者つき）
+  let lastCleaned = '';      // 整形後のテキスト（未変更なら話者情報を再利用する）
+  const SALES_WORD_RE = /(弊社|当社|私ども|ご提案|ご紹介|ご説明|させていただ|プラン|サポート|ポイント|お見積|ご契約|料金|KIZUNA|キズナ)/g;
+  const roleOf = (speaker) => speakerRoles[speaker] || 'unknown';
+
+  // 話者の役割を推定する。担当営業名と一致する話者、なければ営業用語が最も多い話者を「営業」とする
+  function guessRoles(utts) {
+    const stat = new Map();
+    for (const u of utts) {
+      if (!u.speaker) continue;
+      const st = stat.get(u.speaker) || { chars: 0, hits: 0 };
+      st.chars += u.text.length;
+      st.hits += (u.text.match(SALES_WORD_RE) || []).length;
+      stat.set(u.speaker, st);
+    }
+    const names = [...stat.keys()];
+    const salesName = $('sales').value.trim();
+    let guess = names.find(n => salesName && (n.includes(salesName) || salesName.includes(n)));
+    if (!guess && names.length >= 2) {
+      const density = (n) => stat.get(n).hits / (stat.get(n).chars || 1);
+      guess = names.slice().sort((a, b) => density(b) - density(a))[0];
+    }
+    for (const n of names) {
+      if (!speakerRoles[n]) speakerRoles[n] = n === guess ? 'sales' : 'customer';
+    }
+    for (const n of Object.keys(speakerRoles)) {
+      if (!stat.has(n)) delete speakerRoles[n];
+    }
+  }
+
+  function renderSpeakerRoles() {
+    const box = $('speakerRoles');
+    box.textContent = '';
+    const names = Object.keys(speakerRoles);
+    $('speakerWrap').classList.toggle('hidden', !names.length);
+    for (const n of names) {
+      const row = document.createElement('label');
+      row.className = 'flex items-center gap-2 text-sm';
+      const nm = document.createElement('span');
+      nm.className = 'w-44 truncate';
+      nm.textContent = n;
+      nm.title = n;
+      const sel = document.createElement('select');
+      sel.className = 'rounded-lg border border-slate-300 bg-white px-2 py-1';
+      for (const [v, t] of [['sales', '営業'], ['customer', 'お客様']]) {
+        const op = document.createElement('option');
+        op.value = v;
+        op.textContent = t;
+        sel.appendChild(op);
+      }
+      sel.value = speakerRoles[n];
+      sel.addEventListener('change', () => { speakerRoles[n] = sel.value; });
+      row.append(nm, sel);
+      box.appendChild(row);
+    }
   }
 
   /* ---------- ② ルールベース抽出 ---------- */
@@ -349,35 +480,65 @@
       .filter(s => s.length > 1);
   }
 
-  // 優先語を含む文を先頭にして最大 max 件返す
-  function pickSentences(sents, re, preferRe, max = 3) {
-    const hits = sents.filter(s => re.test(s));
-    const pref = preferRe ? hits.filter(s => preferRe.test(s)) : [];
-    return uniq([...pref, ...hits]).slice(0, max).map(s => clip(s));
+  // [{ s: 文, role: 'sales' | 'customer' | 'unknown' }]
+  const sentenceList = (utts) => utts.flatMap(u => splitSentences(u.text).map(s => ({ s, role: roleOf(u.speaker) })));
+  const rank = (arr, preferRe) => (preferRe ? [...arr.filter(s => preferRe.test(s)), ...arr.filter(s => !preferRe.test(s))] : arr);
+
+  // KIZUNA側のサービス紹介・料金の説明（お客様の目的ではない）
+  const SELF_RE = /(弊社|当社|私ども|うちの会社|KIZUNA|キズナ|RAQMO|ラクモ|MEETO|MOFUL|MOEL|SCUMO|nest|サービスの(?:内容|特徴|ご紹介)|月額|税込|料金|お見積|ご契約|契約(?:書|内容)|プランは|サポート体制|ポイント制|他社様|導入(?:事例|実績)|ご説明(?:します|いたします|させて))/i;
+  // 営業の発言のうち、お客様自身のことを言っているもの
+  const TO_CUSTOMER_RE = /(御社|貴社|貴店|お店|店舗|お客様の|ご要望|おっしゃ|のお店)/;
+
+  // お客様（役割不明を含む）の発言から優先して拾い、無ければ営業の「お客様向けの提案」を【営業発言】付きで補う
+  function pickBy(sl, re, preferRe, max = 3, { salesFallback = true } = {}) {
+    const ok = (x) => re.test(x.s) && !SELF_RE.test(x.s);
+    let picked = rank(sl.filter(x => x.role !== 'sales' && ok(x)).map(x => x.s), preferRe).slice(0, max);
+    if (!picked.length && salesFallback) {
+      picked = rank(sl.filter(x => x.role === 'sales' && ok(x) && TO_CUSTOMER_RE.test(x.s)).map(x => x.s), preferRe)
+        .slice(0, max).map(s => '【営業発言】' + s);
+    }
+    return uniq(picked).map(x => clip(x));
   }
 
-  function extractDeadline(sents) {
-    const re = /(初校|納期|締切|締め切り|期限|公開日|リリース|オープン|ローンチ|入稿|\d{1,2}月(?:の)?(?:上旬|中旬|下旬|初旬|末|頭)|\d{1,2}月\d{1,2}日|\d{1,2}\/\d{1,2}|\d{1,2}日(?:まで|頃|ごろ)|年内|来月中|今月中|週間後)/;
-    return pickSentences(sents, re, /(初校|納期)/, 3).join('\n');
+  // 自社の説明を除かず、全員の発言から拾う（販促の提案内容など、営業の発言が正しい情報源になる項目用）
+  function pickAll(sl, re, preferRe, max = 3) {
+    const hits = sl.filter(x => re.test(x.s));
+    const ordered = [...hits.filter(x => x.role !== 'sales'), ...hits.filter(x => x.role === 'sales')].map(x => x.s);
+    return uniq(rank(ordered, preferRe)).slice(0, max).map(x => clip(x));
   }
 
-  function extractTarget(sents) {
-    const re = /(ターゲット|想定(?:ユーザー|顧客|読者)|ユーザー層|顧客層|利用者|対象(?:者|層)|\d{1,2}代|世代|経営者|主婦|学生|シニア|ファミリー|ペルソナ)/;
-    return pickSentences(sents, re, /(ターゲット|ペルソナ|想定)/, 3).join('\n');
+  const OVERVIEW_RE = /(目的|課題|困って|悩み|リニューアル|新規(?:制作|作成)|制作したい|作りたい|作成したい|したいと|やりたい|増やしたい|ホームページ|サイト|LP|ランディング|バナー|集客|問い合わせ|予約|売上|認知|ご依頼)/;
+  const extractOverview = (sl) => pickBy(sl, OVERVIEW_RE, /(目的|課題|困って|悩み|したい|リニューアル|作りたい)/, 3).join('\n');
+
+  // 納期: 「初校・公開・オープン」などの納期の言葉＋時期、または「春には〜したい」の目標時期。
+  // 打ち合わせ日・定休日など別の日付は除く（納期の言葉を含む文は除外しない）
+  const DELIVERY_RE = /(初校|納期|締切|締め切り|期限|公開|オープン|リリース|ローンチ|開店|入稿|完成|間に合|いつまで|までに)/;
+  const GOAL_RE = /(には|ごろには|頃には)[^。]{0,20}(したい|したいな|出したい|始めたい|公開|オープン|欲しい|ほしい|できれば|やりたい)/;
+  const TIME_RE = /(\d{1,2}月(?:の)?(?:上旬|中旬|下旬|初旬|末|頭)?|\d{1,2}日|\d{1,2}\/\d{1,2}|年内|来月|再来月|今月|来週|週間|か月|ヶ月|春|夏|秋|冬|年明け|GW|ゴールデンウィーク|お盆|\d{4}年)/;
+  const OTHER_DATE_RE = /(打ち合わせ|打合せ|ミーティング|商談|次回|アポ|面談|お電話|折り返し|ご連絡|定休|お休み|休み|営業日|Zoom|zoom|ズーム|お時間|ご都合|空いて|日程)/;
+  function extractDeadline(sl) {
+    const hit = (x) => TIME_RE.test(x.s) && !SELF_RE.test(x.s) &&
+      (DELIVERY_RE.test(x.s) || (GOAL_RE.test(x.s) && !OTHER_DATE_RE.test(x.s)));
+    const hits = sl.filter(hit);
+    const ordered = [...hits.filter(x => x.role !== 'sales').map(x => x.s), ...hits.filter(x => x.role === 'sales').map(x => '【営業発言】' + x.s)];
+    return uniq(rank(ordered, /(初校|納期)/)).slice(0, 3).map(x => clip(x)).join('\n');
   }
 
-  function extractOverview(sents) {
-    const re = /(目的|課題|リニューアル|新規(?:制作|作成)|制作したい|作りたい|作成したい|LP|ランディングページ|サイト制作|ホームページ|バナー|訴求|問い合わせ|集客|獲得|ご依頼)/;
-    return pickSentences(sents, re, /(目的|課題|リニューアル|したい)/, 3).join('\n');
-  }
+  const TARGET_RE = /(ターゲット|想定(?:ユーザー|顧客|読者)|ユーザー層|顧客層|利用者|対象(?:者|層)|\d{1,2}代|世代|経営者|主婦|学生|シニア|ファミリー|ペルソナ)/;
+  const extractTarget = (sl) => pickBy(sl, TARGET_RE, /(ターゲット|ペルソナ|想定)/, 3).join('\n');
 
   const TONE_WORDS = ['シンプル', '高級感', 'ポップ', '清潔感', '信頼感', '誠実', '落ち着いた', 'モダン', '明るい', '温かい', 'やわらかい',
-    'スタイリッシュ', 'かっこいい', '親しみやすい', '先進的', 'ナチュラル', '高級', 'カジュアル', 'クール', '上品', '重厚感', '洗練'];
-  function extractTone(sents, text) {
-    const words = TONE_WORDS.filter(w => text.includes(w));
-    const colors = uniq([...text.matchAll(/(青|赤|緑|黄|オレンジ|ピンク|紫|白|黒|紺|ネイビー|グレー|ブルー|レッド|グリーン)(?:ベース|系|色|を基調)/g)].map(m => m[0]));
+    'スタイリッシュ', 'かっこいい', '親しみやすい', '先進的', 'ナチュラル', '高級', 'カジュアル', 'クール', '上品', '重厚感', '洗練',
+    'おしゃれ', 'かわいい', '可愛い', '和風', '華やか'];
+  // トンマナはお客様の発言を優先する（営業の提案語は拾わない）。お客様の発言が無い場合のみ全体から探す
+  function extractTone(sl) {
+    const own = sl.filter(x => x.role !== 'sales');
+    const base = (own.length ? own : sl).map(x => x.s).join('\n');
+    const found = TONE_WORDS.filter(w => base.includes(w));
+    const words = found.filter(w => !found.some(o => o !== w && o.includes(w)));   // 「高級感」があれば「高級」は省く
+    const colors = uniq([...base.matchAll(/(青|赤|緑|黄|オレンジ|ピンク|紫|白|黒|紺|ネイビー|グレー|ブルー|レッド|グリーン)(?:ベース|系|色|を基調)/g)].map(m => m[0]));
     const kw = uniq([...words, ...colors]);
-    const ctx = pickSentences(sents, /(トンマナ|雰囲気|テイスト|イメージ|カラー|配色|デザイン)/, null, 2);
+    const ctx = pickBy(sl, /(トンマナ|雰囲気|テイスト|イメージ|カラー|配色|デザイン)/, null, 2, { salesFallback: false });
     if (!kw.length && !ctx.length) return '';
     return [kw.length ? 'キーワード: ' + kw.join('、') : '', ...ctx].filter(Boolean).join('\n');
   }
@@ -405,18 +566,97 @@
     return lines.join('\n');
   }
 
-  function analyze(text) {
-    const sents = splitSentences(text);
-    return {
-      overview:  extractOverview(sents),
-      deadline:  extractDeadline(sents),
-      target:    extractTarget(sents),
-      tone:      extractTone(sents, text),
-      urls:      extractUrls(text),
-      materials: extractMaterials(sents),
+  // 顧客名: 「株式会社○○」「○○株式会社」「店名は○○」。お客様の発言を重く数え、KIZUNA自身の社名は除く
+  const NAME_STOP = 'はがをにでとものへ';
+  const CORP_PRE_RE = new RegExp(`((?:株式会社|有限会社|合同会社)[ 　]?)([^\\s、。,，「」『』（）()${NAME_STOP}]{1,15})`, 'g');
+  const CORP_POST_RE = new RegExp(`([^\\s、。,，「」『』（）()${NAME_STOP}]{1,15})(株式会社|有限会社|合同会社)`, 'g');
+  const NAME_SAID_RE = /(?:店名|屋号|会社名|社名|お店の名前|サイト名)(?:は|が|を|って)[ 　]?[「『]?([^\s、。」』と]{2,20})/;
+  const EXCLUDE_CLIENT_RE = /(KIZUNA|キズナ|きずな|ラクモ|RAQMO)/i;
+  function extractClient(sl) {
+    const score = new Map();
+    const add = (name, w) => {
+      if (!name || EXCLUDE_CLIENT_RE.test(name)) return;
+      score.set(name, (score.get(name) || 0) + w);
     };
+    for (const x of sl) {
+      const w = x.role === 'sales' ? 1 : 2;
+      for (const m of x.s.matchAll(CORP_PRE_RE)) add(m[1].trim() + m[2], w);
+      for (const m of x.s.matchAll(CORP_POST_RE)) add(m[1] + m[2], w);
+      const n = x.s.match(NAME_SAID_RE);
+      if (n) add(n[1], w + 1);
+    }
+    let best = '';
+    let bestScore = 0;
+    for (const [name, sc] of score) {
+      if (sc > bestScore) { best = name; bestScore = sc; }
+    }
+    return best;
   }
 
+  // RAQMOの販促（MEETO / MOEL / MOFUL）。商品名が出た、または●済みのものだけ詳細を拾う
+  function analyzePromo(sl, text) {
+    const res = {};
+    const sents = sl.map(x => x.s);
+    if (/(MEETO|ミート(?!ボール))/i.test(text)) res.pr_meeto = '●';
+    if (/(MOEL|モエル)/i.test(text)) res.pr_moel = '●';
+    if (/(MOFUL|モフル|SNS代行|投稿代行|運用代行)/i.test(text)) res.pr_mofl = '●';
+
+    if (res.pr_meeto || filled('pr_meeto')) {
+      res.mt_kw = pickAll(sl, /(キーワード|検索ワード|で検索|検索される|検索結果)/, /キーワード/, 3).join('\n');
+      res.mt_item = pickAll(sl, /(商品登録|メニュー登録|商品を登録)/, null, 2).join('\n');
+      const rep = sents.find(x => /レポート/.test(x));
+      if (rep) res.mt_report = /(なし|不要|いらない|ない)/.test(rep) ? 'なし' : 'あり';
+      const ig = text.match(/instagram\.com\/([A-Za-z0-9._]+)/i);
+      if (ig) {
+        res.mt_ig = 'あり';
+        res.mt_igname = '@' + ig[1];
+      } else {
+        const s = sents.find(x => /(インスタ|Instagram)/i.test(x));
+        if (s) res.mt_ig = /(やって(?:い)?ない|持って(?:い)?ない|アカウント(?:は)?(?:ない|なし)|まだ)/.test(s) ? 'なし' : 'あり';
+      }
+    }
+    if (res.pr_moel || filled('pr_moel')) {
+      const lo = sents.find(x => /(公式LINE|LINE公式)/.test(x));
+      if (lo) res.ml_has = /(ない|まだ|新規|持っていない|未開設)/.test(lo) ? 'なし（新規作成）' : 'あり';
+      res.ml_menu = pickAll(sl, /リッチメニュー/, null, 3).join('\n');
+      res.ml_plan = pickAll(sl, /(LINE|ライン)[^。]*(配信|予約|クーポン|活用|問い合わせ|友だち|友達)/, /活用/, 3).join('\n');
+      if (/(リッチメッセージ|あいさつメッセージ|挨拶メッセージ)/.test(text)) res.ml_msg = 'あり';
+    }
+    if (res.pr_mofl || filled('pr_mofl')) {
+      const cs = sents.find(x => /(月|週)\s*(?:\d+|[０-９]+|[一二三四五六七八九十]+)\s*回/.test(x));
+      if (cs) {
+        const cnt = cs.match(/(月|週)\s*(?:\d+|[０-９]+|[一二三四五六七八九十]+)\s*回/)[0].replace(/\s/g, '');
+        const per = cs.match(/(半年|\d+\s*(?:か月|ヶ月|カ月)|一年|1年)/);
+        res.mf_count = cnt + (per ? `（${per[0]}）` : '');
+      }
+      const snsText = sents.filter(x => /(配信|投稿|発信|代行)/.test(x)).join('\n');
+      const sns = [];
+      if (/(インスタ|Instagram)/i.test(snsText)) sns.push('Instagram');
+      if (/(フェイスブック|Facebook)/i.test(snsText)) sns.push('Facebook');
+      if (/(Twitter|ツイッター|「X」)/i.test(snsText)) sns.push('X');
+      if (/(TikTok|ティックトック)/i.test(snsText)) sns.push('TikTok');
+      if (/(YouTube|ユーチューブ)/i.test(snsText)) sns.push('YouTube');
+      res.mf_sns = sns.join('、');
+      res.mf_why = pickAll(sl, /(苦手|時間がない|手が回|任せ|担当|代行)/, /(苦手|時間がない|手が回)/, 3).join('\n');
+    }
+    return res;
+  }
+
+  function analyze(utts) {
+    const sl = sentenceList(utts);
+    const text = utts.map(u => u.text).join('\n');
+    const res = {
+      client:    extractClient(sl),
+      overview:  extractOverview(sl),
+      deadline:  extractDeadline(sl),
+      target:    extractTarget(sl),
+      tone:      extractTone(sl),
+      urls:      extractUrls(text),
+      materials: extractMaterials(sl.map(x => x.s)),
+    };
+    if ($('product').value === 'RAQMO') Object.assign(res, analyzePromo(sl, text));
+    return res;
+  }
 
   // nest用の抽出。認証情報（メール・パスワード）は音声の聞き違いが多く機微のため抽出しない
   const TROUBLE_RE = /(困って|課題|悩み|できていない|できてい|わからない|分からない|手が回|人手|集客|求人|放置|更新でき|不足|口コミ[^。]*(?:ない|少な|無い))/;
@@ -425,16 +665,18 @@
   const PHONE_RE = /0\d{1,4}-\d{1,4}-\d{3,4}/;
   const NON_SITE_RE = /(tabelog|hotpepper|ekiten|itp\.ne\.jp|retty|gnavi|youtube|zoom\.us)/;
 
-  function analyzeNest(text) {
-    const sents = splitSentences(text);
-    const res = {};
+  function analyzeNest(utts) {
+    const sl = sentenceList(utts);
+    const text = utts.map(u => u.text).join('\n');
+    const sents = sl.map(x => x.s);
+    const res = { client: extractClient(sl) };
     if (/フルパック/.test(text)) res.p_full = '●';
 
-    const rest = sents.filter(s => !TROUBLE_RE.test(s));
-    res.trouble = pickSentences(sents.filter(s => TROUBLE_RE.test(s)), TROUBLE_RE, /(困|課題|悩み)/, 4).join('\n');
-    const business = pickSentences(rest, BUSINESS_RE, /(創業|事業|取り扱)/, 3);
+    const nonTrouble = sl.filter(x => !TROUBLE_RE.test(x.s));
+    res.trouble = pickBy(sl.filter(x => TROUBLE_RE.test(x.s)), TROUBLE_RE, /(困|課題|悩み)/, 4).join('\n');
+    const business = pickBy(nonTrouble, BUSINESS_RE, /(創業|事業|取り扱)/, 3);
     res.business = business.join('\n');
-    res.strength = pickSentences(rest, STRENGTH_RE, /(強み|売り|特徴)/, 4).filter(s => !business.includes(s)).join('\n');
+    res.strength = pickBy(nonTrouble, STRENGTH_RE, /(強み|売り|特徴)/, 4).filter(x => !business.includes(x)).join('\n');
 
     const phone = text.match(PHONE_RE);
     if (phone) res.store_tel = phone[0];
@@ -456,6 +698,7 @@
       else if (!res.site_url && !NON_SITE_RE.test(u)) res.site_url = u;
     }
 
+    // 更新頻度は言及があれば上書き。無ければ既定値（半年）のまま
     const freqSent = sents.find(s => /(更新|頻度|プロンプト)/.test(s) && /(毎月|半年|一年|1年|年に?1回)/.test(s));
     if (freqSent) res.freq = /毎月/.test(freqSent) ? '毎月' : /半年/.test(freqSent) ? '半年' : '一年';
     return res;
@@ -524,8 +767,8 @@
     return wrap;
   }
 
-  function renderNestSections(box) {
-    for (const s of NEST_SECTIONS) {
+  function renderSections(box, sections) {
+    for (const s of sections) {
       const sec = document.createElement('div');
       sec.className = 'rounded-lg border border-slate-200 p-4 space-y-3';
       const head = document.createElement('div');
@@ -538,6 +781,12 @@
       note.textContent = s.offNote || '';
       head.append(h, note);
       sec.appendChild(head);
+      if (s.note) {
+        const p = document.createElement('p');
+        p.className = 'text-xs text-slate-500';
+        p.textContent = s.note;
+        sec.appendChild(p);
+      }
       for (const it of s.items) {
         if (it.text !== undefined) {
           const p = document.createElement('p');
@@ -549,7 +798,7 @@
         }
       }
       box.appendChild(sec);
-      nestSecEls[s.id] = { sec, note };
+      secEls[s.id] = { sec, note };
     }
   }
 
@@ -558,8 +807,9 @@
     const notes = $('notesWrap');
     box.textContent = '';
     notes.textContent = '';
-    if (isNest()) { renderNestSections(box); return; }
+    if (isNest()) { renderSections(box, NEST_SECTIONS); return; }
     FIELDS.forEach(f => box.appendChild(makeField({ ...f, type: 'area' })));
+    if ($('product').value === 'RAQMO') renderSections(box, PROMO_SECTIONS);   // 販促（MEETO / MOEL / MOFUL）
     notes.appendChild(makeField({ id: 'notes', label: '備考・その他共有事項', type: 'area', rows: 2, ph: '自由記入' }));
   }
 
@@ -576,7 +826,7 @@
   // 商材に応じてプレビュー全体を描き直す（入力値は values に保持されるので切替で消えない）
   function renderAll() {
     for (const k of Object.keys(els)) delete els[k];
-    for (const k of Object.keys(nestSecEls)) delete nestSecEls[k];
+    for (const k of Object.keys(secEls)) delete secEls[k];
     const nest = isNest();
     renderOrderFields();
     renderProductFields();
@@ -584,19 +834,24 @@
     $('notesWrap').classList.toggle('hidden', nest);
     $('previewKind').textContent = nest ? 'nest用ひな形' : `${$('product').value}用の項目`;
     $('previewNote').textContent = nest
-      ? 'nestの発注ひな形（受注・販促商品／nest本体／AUTO／AIO／AIO-RAQMO付／イレギュラー）の全項目です。この形式のテキストがHubSpotへ転記されます。'
-      : '制作発注の項目（納期・ターゲット・トンマナ・参考URL・提供素材ほか）です。商材をnestにするとnestの発注ひな形に切り替わります。';
+      ? 'nestの発注ひな形（受注・販促商品／nest本体／AUTO／AIO／AIO-RAQMO付／イレギュラー）の全項目です。この形式のテキストがHubSpotのチケットに入ります。'
+      : '制作発注の項目（案件概要・納期・ターゲット・トンマナ・参考URL・提供素材）です。RAQMOでは販促（MEETO・MOEL・MOFUL）の詳細も記入します。商材をnestにするとnestの発注ひな形に切り替わります。';
   }
 
   /* ---------- ③ 品質ゲート ---------- */
-  // 現在の商材で必須の項目一覧（ok = 入力済み）。nestは契約プランに応じて必須が変わる
+  // 現在の商材で入力欄を持つセクション（nest=ひな形 / RAQMO=販促）
+  const sectionsFor = () => (isNest() ? NEST_SECTIONS : $('product').value === 'RAQMO' ? PROMO_SECTIONS : []);
+
+  // 現在の商材で必須の項目一覧（ok = 入力済み）。契約プラン・販促の●に応じて必須が変わる
   function requiredList() {
-    if (!isNest()) {
-      return FIELDS.filter(f => f.critical).map(f => ({ id: f.id, label: f.label, ok: filled(f.id) }));
+    const list = [];
+    if (isNest()) {
+      list.push({ id: 'p_full', label: '受注・販促商品（いずれか1つ以上に●）', ok: PRODUCT_IDS.some(filled) });
+    } else {
+      list.push(...FIELDS.filter(f => f.critical).map(f => ({ id: f.id, label: f.label, ok: filled(f.id) })));
     }
-    const list = [{ id: 'p_full', label: '受注・販促商品（いずれか1つ以上に●）', ok: PRODUCT_IDS.some(filled) }];
-    for (const s of NEST_SECTIONS) {
-      if (!NEST_ACTIVE[s.when]()) continue;
+    for (const s of sectionsFor()) {
+      if (!ACTIVE_WHEN[s.when]()) continue;
       for (const it of s.items) {
         if (it.req) list.push({ id: it.id, label: nestLabel(it), ok: filled(it.id) });
       }
@@ -605,8 +860,7 @@
   }
 
   function refreshAll() {
-    const req = requiredList();
-    const reqMap = new Map(req.map(r => [r.id, r]));
+    const reqMap = new Map(requiredList().map(r => [r.id, r]));
     for (const [id, e] of Object.entries(els)) {
       const r = reqMap.get(id);
       const missing = !!r && !r.ok;
@@ -619,10 +873,10 @@
       e.warn.textContent = w;
       e.warn.classList.toggle('hidden', !w);
     }
-    for (const s of NEST_SECTIONS) {
-      const e = nestSecEls[s.id];
+    for (const s of sectionsFor()) {
+      const e = secEls[s.id];
       if (!e) continue;
-      const off = !NEST_ACTIVE[s.when]();
+      const off = !ACTIVE_WHEN[s.when]();
       e.note.classList.toggle('hidden', !off || !s.offNote);
       e.sec.classList.toggle('opacity-60', off);
     }
@@ -634,30 +888,35 @@
     product: $('product').value,
     client: $('client').value.trim() || MISSING,
     sales: $('sales').value.trim() || MISSING,
-    hsId: $('hsId').value.trim() || MISSING,
+    hsId: $('hsDealId').value.trim() || MISSING,
   });
+
+  // セクションの項目を「ひな形の見出し：値」の行にして out に追加する（nest／RAQMO販促で共通）
+  function pushSectionItems(out, s, active) {
+    for (const it of s.items) {
+      if (it.text !== undefined) { out.push(it.text, ''); continue; }
+      const v = (values[it.id] || '').trim();
+      const shown = v || (it.req && active ? MISSING : '');
+      if (it.type === 'area') {
+        out.push(shown ? `${it.out}\n${shown}` : it.out, '');
+      } else if (it.colonless) {
+        out.push(shown ? `${it.out}：${shown}` : it.out, '');
+      } else {
+        out.push(`${it.out}${shown}`, '');
+      }
+    }
+  }
 
   // nestひな形に入力内容を埋めたテキスト（HubSpot転記・コピー用）
   function buildNestText() {
     const out = ['【nestの発注】', '', DASH_LONG, ''];
     for (const s of NEST_SECTIONS) {
-      const active = NEST_ACTIVE[s.when]();
+      const active = ACTIVE_WHEN[s.when]();
       if (s.head) out.push(s.head, '');
       if (!active && s.whenOff) {
         out.push(s.whenOff, '');
       } else {
-        for (const it of s.items) {
-          if (it.text !== undefined) { out.push(it.text, ''); continue; }
-          const v = (values[it.id] || '').trim();
-          const shown = v || (it.req && active ? MISSING : '');
-          if (it.type === 'area') {
-            out.push(shown ? `${it.out}\n${shown}` : it.out, '');
-          } else if (it.colonless) {
-            out.push(shown ? `${it.out}：${shown}` : it.out, '');
-          } else {
-            out.push(`${it.out}${shown}`, '');
-          }
-        }
+        pushSectionItems(out, s, active);
       }
       out.push(s.after === 'eq' ? EQUALS : DASH, '');
     }
@@ -673,11 +932,20 @@
       `- 商材: ${m.product}`,
       `- 顧客名: ${m.client}`,
       `- 担当営業: ${m.sales}`,
-      `- HubSpot ID: ${m.hsId}`,
+      `- HubSpot 取引ID: ${m.hsId}`,
       '',
     ];
     for (const f of FIELDS) {
       lines.push(`## ${f.label}`, val(f.id), '');
+    }
+    if (m.product === 'RAQMO') {
+      // 販促（MEETO / MOEL / MOFUL）。●の商品だけ詳細を載せる
+      lines.push('## 受注・販促商品（販促）', '');
+      for (const s of PROMO_SECTIONS) {
+        if (!ACTIVE_WHEN[s.when]()) continue;
+        if (s.id !== 'promo') lines.push(s.head, '');
+        pushSectionItems(lines, s, true);
+      }
     }
     const pf = PRODUCT_FIELDS[m.product] || [];
     const pLines = pf.filter(f => filled(f.id));
@@ -708,7 +976,13 @@
     ].join('\n');
   }
 
-  /* ---------- ④ HubSpot API ---------- */
+  /* ---------- ④ HubSpot API（チケット作成＋取引・会社への関連付け） ---------- */
+  const HS_BASE = 'https://api.hubapi.com';
+  // HubSpot定義の関連付けタイプID（チケット→取引 / チケット→会社）
+  const ASSOC_TICKET_TO_DEAL = 28;
+  const ASSOC_TICKET_TO_COMPANY = 26;
+  let lastTicketId = '';
+
   function showApiError(msg) {
     const box = $('apiError');
     if (!msg) { box.classList.add('hidden'); box.textContent = ''; return; }
@@ -716,75 +990,141 @@
     box.classList.remove('hidden');
   }
 
+  function showApiResult(msg) {
+    const box = $('apiResult');
+    if (!msg) { box.classList.add('hidden'); box.textContent = ''; return; }
+    box.textContent = msg;
+    box.classList.remove('hidden');
+  }
+
+  async function hsRequest(path, token, init = {}) {
+    const res = await fetch(HS_BASE + path, {
+      ...init,
+      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+    });
+    let json = null;
+    try { json = await res.json(); } catch { /* JSONでない応答 */ }
+    return { res, json };
+  }
+
+  const HS_HINTS = {
+    400: 'リクエストが不正です。プロパティ名（内部名）、パイプラインID・ステージIDが存在するか確認してください。',
+    401: 'トークンが無効または期限切れです。Private Appのトークンを確認してください。',
+    403: '権限不足です。Private Appのスコープ（tickets、取引・会社の読み取り/書き込み）を確認してください。',
+    404: '指定のIDのレコードが見つかりません。取引ID・会社IDを確認してください。',
+    429: 'APIのレート制限に達しました。少し待ってから再実行してください。',
+  };
+  function hsErrorText(step, res, json) {
+    const detail = json && json.message ? '\n詳細: ' + json.message : '';
+    return `${step}に失敗しました（HTTP ${res.status}）。\n${HS_HINTS[res.status] || 'HubSpot側でエラーが発生しました。'}${detail}`;
+  }
+
   async function sendToHubSpot() {
     showApiError('');
+    showApiResult('');
     const token = $('hsToken').value.trim();
-    const id = $('hsId').value.trim();
-    const type = $('hsType').value;
+    const dealId = $('hsDealId').value.trim();
+    let companyId = $('hsCompanyId').value.trim();
     const prop = $('hsProp').value.trim();
+    const pipeline = $('hsPipeline').value.trim();
+    const stage = $('hsStage').value.trim();
     if (!token) { $('hsSettings').open = true; showApiError('HubSpotのアクセストークンが未設定です。左カラム「2. HubSpot接続設定」で入力してください。'); return; }
-    if (!/^\d+$/.test(id)) { showApiError('HubSpot 対象IDは数字で入力してください（右カラム「制作発注書プレビュー」の基本情報）。'); return; }
-    if (!prop) { $('hsSettings').open = true; showApiError('転記先プロパティ名を入力してください。'); return; }
+    if (!/^\d+$/.test(dealId)) { showApiError('HubSpot 取引IDは数字で入力してください（右カラム「制作発注書プレビュー」の基本情報）。'); return; }
+    if (companyId && !/^\d+$/.test(companyId)) { showApiError('HubSpot 会社IDは数字で入力してください（空欄なら取引から自動取得します）。'); return; }
+    if (!prop || !pipeline || !stage) { $('hsSettings').open = true; showApiError('チケットのプロパティ名・パイプラインID・ステージIDを入力してください（左カラム「2. HubSpot接続設定」）。'); return; }
 
     const ready = requiredList().every(r => r.ok);
-    if (!ready && !confirm('未確定の必須項目があります。このまま転記しますか？')) return;
-    if (!confirm(`HubSpotの${type === 'deals' ? '取引' : 'チケット'} ${id} のプロパティ「${prop}」を、発注書の内容で上書きします。よろしいですか？`)) return;
+    if (!ready && !confirm('未確定の必須項目があります。このままチケットを作成しますか？')) return;
+    if (lastTicketId && !confirm(`このページですでにチケット（ID: ${lastTicketId}）を作成済みです。もう1枚作成しますか？`)) return;
+    if (!confirm(`チケットを新規作成し、取引 ${dealId} ${companyId ? `・会社 ${companyId}` : '・会社（取引から自動取得）'} に紐づけます。よろしいですか？`)) return;
 
     const btn = $('btnHubSpot');
     btn.disabled = true;
     btn.textContent = '送信中…';
     try {
-      const res = await fetch(`https://api.hubapi.com/crm/v3/objects/${type}/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ properties: { [prop]: buildOrderText() } }),
-      });
-      if (res.ok) { toast('✅ 転記完了'); return; }
-      let detail = '';
-      try { const j = await res.json(); detail = j.message || ''; } catch { /* JSONでない応答 */ }
-      const hints = {
-        400: 'リクエストが不正です。プロパティ名（内部名）が存在するか、型が文字列系か確認してください。',
-        401: 'トークンが無効または期限切れです。Private Appのトークンを確認してください。',
-        403: '権限不足です。Private Appのスコープ（crm.objects.deals.write など）を確認してください。',
-        404: '指定のIDのレコードが見つかりません。取引/チケットの種類とIDを確認してください。',
-        429: 'APIのレート制限に達しました。少し待ってから再実行してください。',
+      // 会社IDが空なら、取引に紐づく会社を取得する
+      if (!companyId) {
+        const a = await hsRequest(`/crm/v4/objects/deals/${encodeURIComponent(dealId)}/associations/companies`, token);
+        if (!a.res.ok) { showApiError(hsErrorText('取引に紐づく会社の取得', a.res, a.json)); toast('会社の取得に失敗しました', false); return; }
+        const first = a.json && a.json.results && a.json.results[0];
+        companyId = first ? String(first.toObjectId) : '';
+        if (!companyId) {
+          showApiError('この取引には会社が紐づいていません。HubSpotで取引に会社を関連付けるか、会社IDを入力してください。チケットは作成していません。');
+          toast('会社が見つかりません', false);
+          return;
+        }
+      }
+      const kind = isNest() ? '【nestの発注】' : '【制作発注】';
+      const body = {
+        properties: {
+          subject: `${kind}${$('client').value.trim() || '（顧客名未入力）'}`,
+          [prop]: buildOrderText(),
+          hs_pipeline: pipeline,
+          hs_pipeline_stage: stage,
+        },
+        associations: [
+          { to: { id: dealId }, types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: ASSOC_TICKET_TO_DEAL }] },
+          { to: { id: companyId }, types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: ASSOC_TICKET_TO_COMPANY }] },
+        ],
       };
-      showApiError(`HubSpotへの転記に失敗しました（HTTP ${res.status}）。\n${hints[res.status] || 'HubSpot側でエラーが発生しました。'}${detail ? '\n詳細: ' + detail : ''}`);
-      toast('転記に失敗しました', false);
+      const t = await hsRequest('/crm/v3/objects/tickets', token, { method: 'POST', body: JSON.stringify(body) });
+      if (!t.res.ok) { showApiError(hsErrorText('チケットの作成', t.res, t.json)); toast('チケットの作成に失敗しました', false); return; }
+      lastTicketId = t.json && t.json.id ? String(t.json.id) : '（ID不明）';
+      showApiResult(`チケット（ID: ${lastTicketId}）を作成し、取引 ${dealId}・会社 ${companyId} に紐づけました。`);
+      toast('✅ チケットを作成しました');
     } catch (err) {
       showApiError(
-        'HubSpotと通信できませんでした。\n' +
+        'HubSpotと通信できませんでした（チケットは作成されていません）。\n' +
         '・インターネット接続を確認してください。\n' +
         '・HubSpot APIはブラウザからの直接呼び出し（CORS）を拒否する場合があります。その場合は、' +
-        '「📋 発注書テキストをコピー」でHubSpotへ手動貼り付けしてください。\n' +
+        '「📋 発注書テキストをコピー」でHubSpotのチケットへ手動貼り付けしてください。\n' +
         '詳細: ' + (err && err.message ? err.message : err)
       );
       toast('通信に失敗しました', false);
     } finally {
       btn.disabled = false;
-      btn.textContent = '🚀 HubSpotへ転記';
+      btn.textContent = '🎫 HubSpotにチケットを作成して転記';
     }
   }
 
   /* ---------- 入力ハンドラ ---------- */
+  // 入力欄のテキストから話者つきの発言を作る（整形済みで未変更なら前回の話者情報を再利用）
+  function loadUtterances() {
+    const raw = $('transcript').value;
+    if (utterances.length && raw === lastCleaned) return;
+    utterances = parseUtterances(raw);
+  }
+
   function runClean() {
     const ta = $('transcript');
     const before = ta.value.length;
     if (!before) { toast('文字起こしが空です', false); return false; }
-    ta.value = cleanTranscript(ta.value);
+    loadUtterances();
+    guessRoles(utterances);
+    renderSpeakerRoles();
+    lastCleaned = utterances.map(u => u.text).join('\n');
+    ta.value = lastCleaned;
     $('cleanStat').textContent = `整形: ${before.toLocaleString()} → ${ta.value.length.toLocaleString()} 文字`;
     return true;
   }
 
   function runAnalyze() {
     if (!runClean()) return;
-    const found = isNest() ? analyzeNest($('transcript').value) : analyze($('transcript').value);
+    const found = isNest() ? analyzeNest(utterances) : analyze(utterances);
+    const client = found.client;
+    delete found.client;
+    if (client && isNest()) { found.shop = client; found.store_name = client; }
     let n = 0;
     for (const [id, v] of Object.entries(found)) {
       if (!v) continue;           // 検出なしは既存入力を保持
       values[id] = v;
       autoFilled.add(id);
       if (els[id]) els[id].ta.value = v;
+      n++;
+    }
+    if (client && !$('client').value.trim()) {
+      $('client').value = client;
+      $('clientAuto').classList.remove('hidden');
       n++;
     }
     refreshAll();
@@ -798,6 +1138,38 @@
     runAnalyze();   // 読み込んだらそのまま整形・解析して項目を埋める
   }
 
+  // クリップボードの文字起こしをそのまま取り込んで解析する（ブラウザの許可が必要）
+  async function importFromClipboard() {
+    try {
+      const t = await navigator.clipboard.readText();
+      if (!t.trim()) { toast('クリップボードが空です', false); return; }
+      $('transcript').value = t;
+      runAnalyze();
+    } catch {
+      toast('クリップボードを読み取れませんでした。入力欄に貼り付け（Ctrl+V）してください', false);
+    }
+  }
+
+  // 起動時の商材選択。URLに ?product=nest / ?product=raqmo を付けると選択画面を飛ばして開く
+  function chooseProduct(p, announce = true) {
+    $('product').value = p;
+    const start = $('startScreen');
+    if (start) start.remove();
+    renderAll();
+    refreshAll();
+    $('transcript').focus();
+    if (announce) toast('文字起こし（.vtt / .txt）を入れるか貼り付けると、自動で項目を埋めます');
+  }
+  function setupStartScreen() {
+    const byQuery = { nest: 'nest', raqmo: 'RAQMO' };
+    let q = '';
+    try { q = (new URLSearchParams(location.search).get('product') || '').toLowerCase(); } catch { q = ''; }
+    document.querySelectorAll('#startScreen [data-product]').forEach(b => {
+      b.addEventListener('click', () => chooseProduct(b.dataset.product));
+    });
+    if (byQuery[q]) chooseProduct(byQuery[q], false);
+  }
+
   function setupDnD() {
     const dz = $('dropzone');
     ['dragenter', 'dragover'].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add('drop-active'); }));
@@ -807,19 +1179,19 @@
   }
 
   /* ---------- HubSpot設定の保存 ---------- */
-  const DEFAULT_PROP = { deals: 'description', tickets: 'content' };
+  // 入力欄id -> [LocalStorageのキー, 初期値]
+  const HS_SETTINGS = {
+    hsProp:     ['hsTicketProp', 'content'],
+    hsPipeline: ['hsPipeline', '0'],
+    hsStage:    ['hsStage', '1'],
+  };
   function initHubSpotSettings() {
     const savedToken = lsGet('hsToken');
     if (savedToken) { $('hsToken').value = savedToken; $('hsRemember').checked = true; }
-    $('hsType').value = lsGet('hsType') || 'deals';
-    $('hsProp').value = lsGet('hsProp') || DEFAULT_PROP[$('hsType').value];
-    let propEdited = !!lsGet('hsProp');
-
-    $('hsProp').addEventListener('input', () => { propEdited = true; lsSet('hsProp', $('hsProp').value.trim()); });
-    $('hsType').addEventListener('change', () => {
-      lsSet('hsType', $('hsType').value);
-      if (!propEdited) $('hsProp').value = DEFAULT_PROP[$('hsType').value];
-    });
+    for (const [id, [key, def]] of Object.entries(HS_SETTINGS)) {
+      $(id).value = lsGet(key) || def;
+      $(id).addEventListener('input', () => lsSet(key, $(id).value.trim()));
+    }
     const saveToken = () => {
       if ($('hsRemember').checked) lsSet('hsToken', $('hsToken').value.trim()); else lsDel('hsToken');
     };
@@ -841,6 +1213,7 @@
     $('product').addEventListener('change', () => { renderAll(); refreshAll(); });
     $('btnClean').addEventListener('click', () => { if (runClean()) toast('整形しました'); });
     $('btnAnalyze').addEventListener('click', runAnalyze);
+    $('client').addEventListener('input', () => $('clientAuto').classList.add('hidden'));
     $('btnCopyConfirm').addEventListener('click', async () => {
       const ok = await copyText(buildConfirmMessage());
       toast(ok ? '確認文をコピーしました' : 'コピーに失敗しました', ok);
@@ -850,6 +1223,9 @@
       toast(ok ? '発注書テキストをコピーしました' : 'コピーに失敗しました', ok);
     });
     $('btnHubSpot').addEventListener('click', sendToHubSpot);
+    $('btnClipboard').addEventListener('click', importFromClipboard);
+    $('transcript').addEventListener('paste', () => setTimeout(runAnalyze, 0));   // 貼り付けたらそのまま解析
+    setupStartScreen();
   }
   init();
 })();
