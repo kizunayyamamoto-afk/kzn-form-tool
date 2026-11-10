@@ -123,7 +123,7 @@
           </label>
           <label class="block">
             <span class="text-sm font-medium">担当営業</span>
-            <input id="sales" type="text" placeholder="森川" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
+            <input id="sales" type="text" placeholder="○○" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
           </label>
           <div class="block sm:col-span-2">
             <span class="text-sm font-medium">HubSpot 紐づけ先</span>
@@ -168,7 +168,6 @@
   /* ---------- 発注書フィールド定義 ---------- */
   const FIELDS = [
     { id: 'overview',  label: '案件概要・制作目的',        critical: true,  rows: 3, ph: '例: LPリニューアル。問い合わせ数の増加が目的' },
-    { id: 'deadline',  label: '希望納期 / 初校希望日',      critical: true,  rows: 2, ph: '例: 初校は11月中旬、公開は12月上旬' },
     { id: 'target',    label: 'ターゲット層 / 想定ユーザー', critical: true,  rows: 2, ph: '例: 40〜50代の男性経営者' },
     { id: 'tone',      label: 'デザインのトーン＆マナー',   critical: false, rows: 2, ph: '例: シンプル、高級感、青ベース' },
     { id: 'urls',      label: '参考サイト・競合URL',       critical: true,  rows: 3, ph: 'https://example.com/（1行に1件）' },
@@ -510,20 +509,6 @@
   const OVERVIEW_RE = /(目的|課題|困って|悩み|リニューアル|新規(?:制作|作成)|制作したい|作りたい|作成したい|したいと|やりたい|増やしたい|ホームページ|サイト|LP|ランディング|バナー|集客|問い合わせ|予約|売上|認知|ご依頼)/;
   const extractOverview = (sl) => pickBy(sl, OVERVIEW_RE, /(目的|課題|困って|悩み|したい|リニューアル|作りたい)/, 3).join('\n');
 
-  // 納期: 「初校・公開・オープン」などの納期の言葉＋時期、または「春には〜したい」の目標時期。
-  // 打ち合わせ日・定休日など別の日付は除く（納期の言葉を含む文は除外しない）
-  const DELIVERY_RE = /(初校|納期|締切|締め切り|期限|公開|オープン|リリース|ローンチ|開店|入稿|完成|間に合|いつまで|までに)/;
-  const GOAL_RE = /(には|ごろには|頃には)[^。]{0,20}(したい|したいな|出したい|始めたい|公開|オープン|欲しい|ほしい|できれば|やりたい)/;
-  const TIME_RE = /(\d{1,2}月(?:の)?(?:上旬|中旬|下旬|初旬|末|頭)?|\d{1,2}日|\d{1,2}\/\d{1,2}|年内|来月|再来月|今月|来週|週間|か月|ヶ月|春|夏|秋|冬|年明け|GW|ゴールデンウィーク|お盆|\d{4}年)/;
-  const OTHER_DATE_RE = /(打ち合わせ|打合せ|ミーティング|商談|次回|アポ|面談|お電話|折り返し|ご連絡|定休|お休み|休み|営業日|Zoom|zoom|ズーム|お時間|ご都合|空いて|日程)/;
-  function extractDeadline(sl) {
-    const hit = (x) => TIME_RE.test(x.s) && !SELF_RE.test(x.s) &&
-      (DELIVERY_RE.test(x.s) || (GOAL_RE.test(x.s) && !OTHER_DATE_RE.test(x.s)));
-    const hits = sl.filter(hit);
-    const ordered = [...hits.filter(x => x.role !== 'sales').map(x => x.s), ...hits.filter(x => x.role === 'sales').map(x => '【営業発言】' + x.s)];
-    return uniq(rank(ordered, /(初校|納期)/)).slice(0, 3).map(x => clip(x)).join('\n');
-  }
-
   const TARGET_RE = /(ターゲット|想定(?:ユーザー|顧客|読者)|ユーザー層|顧客層|利用者|対象(?:者|層)|\d{1,2}代|世代|経営者|主婦|学生|シニア|ファミリー|ペルソナ)/;
   const extractTarget = (sl) => pickBy(sl, TARGET_RE, /(ターゲット|ペルソナ|想定)/, 3).join('\n');
 
@@ -648,7 +633,6 @@
     const res = {
       client:    extractClient(sl),
       overview:  extractOverview(sl),
-      deadline:  extractDeadline(sl),
       target:    extractTarget(sl),
       tone:      extractTone(sl),
       urls:      extractUrls(text),
@@ -835,7 +819,7 @@
     $('previewKind').textContent = nest ? 'nest用ひな形' : `${$('product').value}用の項目`;
     $('previewNote').textContent = nest
       ? 'nestの発注ひな形（受注・販促商品／nest本体／AUTO／AIO／AIO-RAQMO付／イレギュラー）の全項目です。この形式のテキストがHubSpotのチケットに入ります。'
-      : '制作発注の項目（案件概要・納期・ターゲット・トンマナ・参考URL・提供素材）です。RAQMOでは販促（MEETO・MOEL・MOFUL）の詳細も記入します。商材をnestにするとnestの発注ひな形に切り替わります。';
+      : '制作発注の項目（案件概要・ターゲット・トンマナ・参考URL・提供素材）です。RAQMOでは販促（MEETO・MOEL・MOFUL）の詳細も記入します。商材をnestにするとnestの発注ひな形に切り替わります。';
   }
 
   /* ---------- ③ 品質ゲート ---------- */
