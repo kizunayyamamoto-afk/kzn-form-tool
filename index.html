@@ -3,169 +3,388 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>商談文字起こし ➔ 発注書自動起票 ＆ 品質ゲートツール</title>
+<title>発注書作成ツール｜Zoom商談から制作発注書へ</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M10 7h8l5 5v13H10z' fill='none' stroke='white' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='m13 18 2.5 2.5L20 15' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <script src="https://cdn.tailwindcss.com/3.4.16"></script>
 <style>
+  /* ===== デザイントークン ===== */
+  :root {
+    --bg: #f4f5f9; --surface: #ffffff; --surface-2: #fafbfd;
+    --line: #e3e6ee; --line-strong: #cfd4e0;
+    --text: #1a2133; --muted: #5a6479; --subtle: #8a93a7;
+    --brand: #4f46e5; --brand-hover: #4338ca; --brand-soft: #eef0ff; --brand-ring: rgba(79, 70, 229, .22);
+    --danger: #c0264b; --danger-soft: #fff1f4; --danger-line: #f1b3c1;
+    --info: #0b66c3; --info-soft: #e7f2ff;
+    --ok: #0b7a55; --ok-soft: #e4f6ee; --ok-line: #a6dcc4;
+    --warn: #a15c07;
+    --shadow: 0 1px 2px rgba(20, 28, 46, .05), 0 6px 18px rgba(20, 28, 46, .05);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  body.app {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, "Noto Sans JP", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.65; -webkit-font-smoothing: antialiased;
+  }
+  .hidden { display: none !important; }
   textarea { resize: vertical; }
-  .drop-active { outline: 3px dashed #3b82f6; outline-offset: -3px; background: #eff6ff; }
+  .icon { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* ===== ヘッダー ===== */
+  .topbar { position: sticky; top: 0; z-index: 30; background: rgba(255, 255, 255, .88); backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--line); }
+  .topbar-inner { max-width: 1360px; margin: 0 auto; padding: 11px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .brand-mark { width: 36px; height: 36px; border-radius: 10px; color: #fff; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6366f1, #4338ca); box-shadow: 0 4px 10px rgba(79, 70, 229, .3); flex: none; }
+  .brand-mark .icon { width: 20px; height: 20px; }
+  .brand-text h1 { margin: 0; font-size: 16px; font-weight: 700; line-height: 1.3; letter-spacing: .01em; }
+  .brand-text p { margin: 0; font-size: 12px; color: var(--muted); }
+  .topbar-actions { display: flex; align-items: center; gap: 10px; flex: none; }
+  @media (max-width: 639px) { .brand-text p { display: none; } .topbar-inner { padding: 10px 16px; } }
+
+  /* ===== 部品 ===== */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
+  .card-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+  .card-title { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: .01em; }
+  .card-body { padding: 18px 20px 20px; }
+  .step-no { width: 22px; height: 22px; border-radius: 999px; background: var(--brand); color: #fff; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .head-note { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .hint { font-size: 12px; line-height: 1.6; color: var(--muted); margin: 0; }
+  .label { font-size: 13px; font-weight: 600; color: #2a3347; }
+  .req-star { color: var(--danger); font-weight: 700; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 10px; font-weight: 600; font-size: 13.5px; line-height: 1.2; padding: 10px 14px; border: 1px solid var(--line-strong); background: #fff; color: var(--text); cursor: pointer; transition: background .15s, border-color .15s, box-shadow .15s, transform .05s; }
+  .btn:hover { background: #f4f5fa; border-color: #bcc3d3; }
+  .btn:active { transform: translateY(1px); }
+  .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--brand-ring); }
+  .btn:disabled { opacity: .6; cursor: not-allowed; }
+  .btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; box-shadow: 0 2px 8px rgba(79, 70, 229, .28); }
+  .btn-primary:hover { background: var(--brand-hover); border-color: var(--brand-hover); }
+  .btn-lg { padding: 13px 20px; font-size: 14.5px; }
+  .btn-sm { padding: 7px 10px; font-size: 12.5px; }
+  .btn-ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn-ghost:hover { background: #eceef5; border-color: transparent; }
+  .btn-block { width: 100%; }
+  .link-btn { display: block; margin: 14px auto 0; background: none; border: 0; padding: 4px 8px; font-size: 12.5px; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+  .link-btn:hover { color: var(--brand); }
+
+  .control { width: 100%; border: 1px solid var(--line-strong); border-radius: 10px; background: #fff; padding: 9px 12px; font: inherit; font-size: 14px; line-height: 1.55; color: var(--text); transition: border-color .15s, box-shadow .15s, background .15s; }
+  .control::placeholder { color: #a2aabc; }
+  .control:hover { border-color: #b8bfd0; }
+  .control:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-ring); }
+  .control.is-missing { border-color: var(--danger-line); background: #fffafb; }
+  select.control { appearance: none; -webkit-appearance: none; padding-right: 34px; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%238a93a7' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 8 5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 16px; }
+  .control-sm { width: auto; padding: 6px 30px 6px 10px; font-size: 13px; }
+
+  .pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 1px 9px; font-size: 11px; font-weight: 700; line-height: 1.7; white-space: nowrap; }
+  .pill-danger { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger-line); }
+  .pill-info { background: var(--info-soft); color: var(--info); }
+  .pill-muted { background: #eceef5; color: var(--muted); }
+  .pill-brand { background: var(--brand-soft); color: var(--brand); }
+
+  .alert { border-radius: 10px; padding: 10px 12px; font-size: 13px; white-space: pre-wrap; margin-bottom: 10px; }
+  .alert-danger { background: var(--danger-soft); border: 1px solid var(--danger-line); color: #8c1738; }
+  .alert-ok { background: var(--ok-soft); border: 1px solid var(--ok-line); color: #0a5a40; }
+
+  /* ===== レイアウト ===== */
+  .layout { max-width: 1360px; margin: 0 auto; padding: 24px; display: grid; grid-template-columns: minmax(340px, 5fr) minmax(0, 7fr); gap: 24px; align-items: start; }
+  .col-left { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  .col-right { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  @media (min-width: 1024px) {
+    .col-left { position: sticky; top: 76px; max-height: calc(100vh - 92px); overflow-y: auto; padding: 2px; margin: -2px; scrollbar-width: thin; }
+  }
+  @media (max-width: 1023px) { .layout { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 16px; } }
+
+  /* ===== 文字起こし入力 ===== */
+  .dropzone { border: 1.5px dashed var(--line-strong); border-radius: 12px; padding: 4px; background: var(--surface-2); transition: border-color .15s, background .15s, box-shadow .15s; }
+  .dropzone:focus-within { border-color: var(--brand); background: #fff; box-shadow: 0 0 0 3px var(--brand-ring); }
+  .drop-active { border-color: var(--brand); background: var(--brand-soft); }
+  .control-plain { border: 0; background: transparent; min-height: 220px; font-size: 13.5px; }
+  .control-plain:hover, .control-plain:focus { border: 0; box-shadow: none; }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 16px; }
+  .speaker-box { border: 1px solid var(--line); background: var(--surface-2); border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; }
+  .speaker-box h3 { margin: 0 0 2px; font-size: 13px; font-weight: 700; }
+  .role-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .role-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .role-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  details.card > summary { list-style: none; display: flex; align-items: center; gap: 10px; padding: 14px 20px; cursor: pointer; border-radius: 16px; }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--brand-ring); }
+  details.card > summary .chev { margin-left: auto; color: var(--subtle); transition: transform .15s; }
+  details.card[open] > summary .chev { transform: rotate(180deg); }
+  details.card[open] > summary { border-bottom: 1px solid var(--line); border-radius: 16px 16px 0 0; }
+  .form-stack { display: flex; flex-direction: column; gap: 14px; }
+  .check-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+
+  /* ===== 発注書プレビュー ===== */
+  .basic { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 14px 0 18px; }
+  .basic-title { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .04em; margin: 0 0 12px; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+  @media (max-width: 639px) { .grid-2 { grid-template-columns: minmax(0, 1fr); } }
+  .stack { display: flex; flex-direction: column; gap: 14px; }
+  .section { border: 1px solid var(--line); border-radius: 12px; background: #fff; overflow: hidden; }
+  .section-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 16px; background: var(--surface-2); border-bottom: 1px solid var(--line); cursor: pointer; user-select: none; }
+  .section-head:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--brand-ring); }
+  .section-head.static { cursor: default; }
+  .section.is-collapsed .section-head { border-bottom-color: transparent; }
+  .section-title { margin: 0; font-size: 14px; font-weight: 700; }
+  .section-head .chev { margin-left: auto; color: var(--subtle); transition: transform .15s; }
+  .section.is-collapsed .chev { transform: rotate(-90deg); }
+  .section-body { padding: 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
+  @media (max-width: 767px) { .section-body { grid-template-columns: minmax(0, 1fr); } }
+  .span-2 { grid-column: 1 / -1; }
+  .section-note { grid-column: 1 / -1; margin: 0; font-size: 12px; color: var(--muted); }
+  .sub-label { grid-column: 1 / -1; margin: 2px 0 -4px; padding-top: 10px; border-top: 1px dashed var(--line); font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+  .sub-label:first-child { border-top: 0; padding-top: 0; margin-top: 0; }
+  .field { min-width: 0; display: flex; flex-direction: column; }
+  .field > .control { margin-top: auto; }   /* 補足文の行数が違っても、横に並んだ入力欄の高さをそろえる */
+  .field-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 5px; }
+  .field .hint { margin-bottom: 5px; }
+  .warn { margin: 5px 0 0; font-size: 12px; font-weight: 600; color: var(--warn); }
+
+  /* ===== アクションバー ===== */
+  .actionbar { position: sticky; bottom: 12px; z-index: 20; background: rgba(255, 255, 255, .94); backdrop-filter: blur(10px); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 10px 30px rgba(20, 28, 46, .14); padding: 12px; }
+  .actionbar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .actionbar-row .btn-primary { margin-left: auto; }
+  @media (max-width: 639px) { .actionbar-row .btn { flex: 1 1 100%; } .actionbar-row .btn-primary { margin-left: 0; order: -1; } }
+
+  /* ===== 起動画面 ===== */
+  .start { position: fixed; inset: 0; z-index: 40; overflow-y: auto; padding: 32px 16px; background: radial-gradient(1100px 480px at 50% -8%, #e6e8ff 0%, transparent 62%), var(--bg); }
+  .start-card { max-width: 680px; margin: 16px auto; background: #fff; border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 24px 64px rgba(20, 28, 46, .10); padding: 34px; }
+  .start-brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 18px; font-weight: 700; color: var(--muted); font-size: 13px; letter-spacing: .04em; }
+  .start-head { text-align: center; margin-bottom: 26px; }
+  .start-head h2 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: .01em; }
+  .start-head p { margin: 8px 0 0; color: var(--muted); font-size: 13.5px; text-wrap: balance; }
+  .start-block { margin-top: 22px; }
+  .start-block .label { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .url-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .url-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+  .url-text { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+  .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 10px; }
+  @media (max-width: 559px) { .tiles { grid-template-columns: minmax(0, 1fr); } .start-card { padding: 24px 20px; } .start-head h2 { font-size: 20px; } }
+  .start-head h2 { text-wrap: balance; }
+  .tile { display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 20px; border-radius: 16px; border: 1.5px solid var(--line-strong); background: #fff; cursor: pointer; font: inherit; color: inherit; transition: border-color .15s, background .15s, box-shadow .15s, transform .15s; }
+  .tile:hover { border-color: var(--brand); background: var(--brand-soft); box-shadow: 0 8px 22px rgba(79, 70, 229, .16); transform: translateY(-2px); }
+  .tile:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--brand-ring); border-color: var(--brand); }
+  .tile-name { font-size: 22px; font-weight: 800; color: var(--brand); letter-spacing: .01em; }
+  .tile-desc { font-size: 12.5px; line-height: 1.55; color: var(--muted); }
+
+  /* ===== トースト ===== */
+  .toast { position: fixed; left: 50%; top: 76px; transform: translateX(-50%); z-index: 60; width: max-content; max-width: min(92vw, 560px); padding: 11px 18px; border-radius: 12px; font-size: 13.5px; font-weight: 600; color: #fff; box-shadow: 0 12px 32px rgba(20, 28, 46, .28); display: flex; align-items: center; gap: 10px; }
+  .toast::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: #4ade80; flex: none; }
+  .toast-ok { background: #1a2133; }
+  .toast-err { background: #9f1d3d; }
+  .toast-err::before { background: #fecdd3; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
-<body class="bg-slate-50 text-slate-800">
+<body class="app">
 
-<header class="bg-white border-b border-slate-200">
-  <div class="max-w-7xl mx-auto px-4 py-4 flex items-center gap-3">
-    <span class="text-2xl">📝</span>
-    <h1 class="text-lg font-bold">商談文字起こし ➔ 発注書自動起票 ＆ 品質ゲートツール</h1>
+<!-- アイコン（インラインSVG。外部ファイル・ライブラリは使わない） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-logo" viewBox="0 0 24 24"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v5h5"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4z"/></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect x="6" y="5" width="12" height="16" rx="2"/><path d="M9 5V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/></symbol>
+  <symbol id="i-wand" viewBox="0 0 24 24"><path d="m15 4 1 2 2 1-2 1-1 2-1-2-2-1 2-1z"/><path d="m4 20 11-11"/><path d="m18 14 .7 1.3L20 16l-1.3.7L18 18l-.7-1.3L16 16l1.3-.7z"/></symbol>
+</svg>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-logo"/></svg></span>
+      <div class="brand-text">
+        <h1>発注書作成ツール</h1>
+        <p>Zoom商談の文字起こしから制作発注書を作り、HubSpotへ</p>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <span id="productPill" class="pill pill-brand hidden"></span>
+      <button id="btnRestart" type="button" class="btn btn-ghost btn-sm hidden">案件を選び直す</button>
+    </div>
   </div>
 </header>
 
 <!-- ===================== 起動時：商材の選択 ===================== -->
-<div id="startScreen" class="fixed inset-0 z-40 overflow-y-auto bg-slate-50 p-6">
-  <div class="mx-auto my-6 w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-    <h2 class="text-xl font-bold">今回の案件はどちらですか？</h2>
-    <p class="mt-2 text-sm text-slate-500">選ぶと発注書の作成画面が開きます。Zoomの文字起こし（.vtt / .txt）を入れる（または貼り付ける）と、自動で項目を埋めます。</p>
+<div id="startScreen" class="start">
+  <div class="start-card">
+    <div class="start-brand">
+      <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-logo"/></svg></span>
+      発注書作成ツール
+    </div>
+    <div class="start-head">
+      <h2>今回の案件を選んでください</h2>
+      <p>Zoomの文字起こし（.vtt / .txt）を入れる（または貼り付ける）と、発注書の項目を自動で埋めます。</p>
+    </div>
 
-    <div class="mt-6 text-left">
-      <label for="startUrls" class="text-sm font-bold">URLをまとめて貼り付け（任意）</label>
-      <p class="mb-2 text-xs text-slate-500">お客様に見せた資料・サイトのURL、既存サイト、Instagram・X・Facebook、GoogleビジネスプロフィールのURLを、改行やスペース区切りでまとめて貼ってください。種類は自動で振り分けます（変更もできます）。下の商材ボタンを押すと、発注書の該当欄に転記されます。</p>
-      <textarea id="startUrls" rows="4" placeholder="https://..." class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"></textarea>
-      <div id="startUrlList" class="mt-2 space-y-1"></div>
+    <div class="start-block">
+      <label for="startUrls" class="label">お客様に見せたURL<span class="pill pill-muted">任意</span></label>
+      <p class="hint" style="margin-bottom:8px">お客様に見せた資料・サイトのURL、既存サイト、Instagram・X・Facebook、GoogleビジネスプロフィールのURLを、改行やスペース区切りでまとめて貼ってください。種類は自動で振り分けます（変更もできます）。下の商材ボタンを押すと、発注書の該当欄に転記されます。</p>
+      <textarea id="startUrls" rows="4" placeholder="https://..." class="control"></textarea>
+      <div id="startUrlList" class="url-list"></div>
     </div>
-    <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <button type="button" data-product="nest" class="rounded-xl bg-blue-600 px-6 py-6 text-lg font-bold text-white hover:bg-blue-700">nest</button>
-      <button type="button" data-product="RAQMO" class="rounded-xl bg-indigo-600 px-6 py-6 text-lg font-bold text-white hover:bg-indigo-700">RAQMO<span class="block text-xs font-normal">制作発注</span></button>
+
+    <div class="start-block">
+      <p class="label" style="margin:0">商材を選ぶ</p>
+      <div class="tiles">
+        <button type="button" data-product="nest" class="tile">
+          <span class="tile-name">nest</span>
+          <span class="tile-desc">nestの発注書（フルパック・単体・RAQMO-LP付き）</span>
+        </button>
+        <button type="button" data-product="RAQMO" class="tile">
+          <span class="tile-name">RAQMO</span>
+          <span class="tile-desc">制作発注（ホームページ制作・販促）</span>
+        </button>
+      </div>
+      <button type="button" data-product="その他" class="link-btn">その他の案件</button>
     </div>
-    <button type="button" data-product="その他" class="mt-4 text-xs text-slate-500 underline">その他の案件</button>
   </div>
 </div>
 
-<main class="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+<main class="layout">
 
-  <!-- ===================== 左カラム：商談入力 ===================== -->
-  <section class="space-y-6">
+  <!-- ===================== 左カラム：入力 ===================== -->
+  <section class="col-left" aria-label="入力">
 
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-      <h2 class="font-bold mb-1">1. Zoom文字起こし入力！！</h2>
-      <p class="text-xs text-slate-500 mb-3">テキストを貼り付けるか、.vtt / .txt ファイルをここにドラッグ＆ドロップしてください。貼り付け・読み込みと同時に自動で解析して、右の発注書プレビューを埋めます。</p>
-      <div id="dropzone" class="rounded-lg">
-        <textarea id="transcript" rows="12" placeholder="ここに文字起こしを貼り付け、または .vtt / .txt をドロップ"
-          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"></textarea>
+    <div class="card">
+      <div class="card-head">
+        <span class="step-no">1</span>
+        <h2 class="card-title">Zoomの文字起こし</h2>
       </div>
-      <div class="mt-2 flex flex-wrap items-center gap-3 text-sm">
-        <label class="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">
-          ファイルを選択
-          <input id="fileInput" type="file" accept=".vtt,.txt,text/plain,text/vtt" class="hidden">
-        </label>
-        <button id="btnClipboard" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">📋 クリップボードから取り込む</button>
-        <button id="btnClean" type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">タイムスタンプ・話者名を除去</button>
-        <span id="cleanStat" class="text-xs text-slate-500"></span>
+      <div class="card-body">
+        <p class="hint" style="margin-bottom:10px">テキストを貼り付けるか、.vtt / .txt ファイルをここにドラッグ＆ドロップしてください。貼り付け・読み込みと同時に自動で解析して、右の発注書プレビューを埋めます。</p>
+        <div id="dropzone" class="dropzone">
+          <textarea id="transcript" rows="12" placeholder="ここに文字起こしを貼り付け、または .vtt / .txt をドロップ" class="control control-plain"></textarea>
+        </div>
+        <div class="toolbar">
+          <label class="btn btn-sm" style="cursor:pointer">
+            <svg class="icon" aria-hidden="true"><use href="#i-file"/></svg>ファイルを選択
+            <input id="fileInput" type="file" accept=".vtt,.txt,text/plain,text/vtt" class="hidden">
+          </label>
+          <button id="btnClipboard" type="button" class="btn btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-clip"/></svg>クリップボードから取り込む</button>
+          <button id="btnClean" type="button" class="btn btn-ghost btn-sm">タイムスタンプ・話者名を除去</button>
+          <span id="cleanStat" class="hint"></span>
+        </div>
+
+        <div id="speakerWrap" class="speaker-box hidden">
+          <h3>話者の役割</h3>
+          <p class="hint">お客様の発言を優先して項目を埋めます。判定が違う場合は変更して、「自動解析」を押し直してください。</p>
+          <div id="speakerRoles" class="role-list"></div>
+        </div>
+
+        <button id="btnAnalyze" type="button" class="btn btn-primary btn-lg btn-block"><svg class="icon" aria-hidden="true"><use href="#i-wand"/></svg>自動解析して発注書に反映</button>
+        <p class="hint" style="margin-top:10px">※ 解析はブラウザ内のルールベースで行います（AI・外部送信なし）。抽出結果は必ず目視で確認してください。</p>
       </div>
-      <div id="speakerWrap" class="hidden mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
-        <h3 class="text-sm font-bold">話者の役割</h3>
-        <p class="mb-2 text-xs text-slate-500">お客様の発言を優先して項目を埋めます。判定が違う場合は変更して、「自動解析」を押し直してください。</p>
-        <div id="speakerRoles" class="space-y-1"></div>
-      </div>
-      <button id="btnAnalyze" type="button"
-        class="mt-4 w-full rounded-lg bg-blue-600 px-4 py-3 font-bold text-white hover:bg-blue-700">🚀 発注書ドラフトを自動解析・生成</button>
-      <p class="mt-2 text-xs text-slate-500">※ 解析はブラウザ内のルールベースで行います（AI・外部送信なし）。抽出結果は必ず目視で確認してください。</p>
     </div>
 
-    <details id="hsSettings" class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-      <summary class="font-bold cursor-pointer">2. HubSpot接続設定（クリックで開閉）</summary>
-      <div class="mt-4 space-y-4">
-        <label class="block">
-          <span class="text-sm font-medium">Private App アクセストークン</span>
-          <input id="hsToken" type="password" autocomplete="off" placeholder="pat-na1-xxxxxxxx"
-            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm">
-        </label>
-        <label class="flex items-center gap-2 text-sm">
-          <input id="hsRemember" type="checkbox">
-          このブラウザのLocalStorageに保存する（共有PCでは非推奨）
-        </label>
-        <label class="block">
-          <span class="text-sm font-medium">発注書を入れるチケットのプロパティ名（内部名）</span>
-          <input id="hsProp" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm">
-          <span class="text-xs text-slate-500">チケット本文の標準: content ／ 社内カスタムプロパティも指定可</span>
-        </label>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <label class="block">
-            <span class="text-sm font-medium">パイプラインID</span>
-            <input id="hsPipeline" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm">
+    <details id="hsSettings" class="card">
+      <summary>
+        <span class="step-no">2</span>
+        <span class="card-title">HubSpot接続設定</span>
+        <svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </summary>
+      <div class="card-body">
+        <div class="form-stack">
+          <label>
+            <span class="label">Private App アクセストークン</span>
+            <input id="hsToken" type="password" autocomplete="off" placeholder="pat-na1-xxxxxxxx" class="control" style="margin-top:5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px">
           </label>
-          <label class="block">
-            <span class="text-sm font-medium">ステージID</span>
-            <input id="hsStage" type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-sm">
+          <label class="check-row">
+            <input id="hsRemember" type="checkbox">
+            このブラウザのLocalStorageに保存する（共有PCでは非推奨）
           </label>
+          <label>
+            <span class="label">発注書を入れるチケットのプロパティ名（内部名）</span>
+            <input id="hsProp" type="text" class="control" style="margin-top:5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px">
+            <span class="hint">チケット本文の標準: content ／ 社内カスタムプロパティも指定可</span>
+          </label>
+          <div class="grid-2">
+            <label>
+              <span class="label">パイプラインID</span>
+              <input id="hsPipeline" type="text" class="control" style="margin-top:5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px">
+            </label>
+            <label>
+              <span class="label">ステージID</span>
+              <input id="hsStage" type="text" class="control" style="margin-top:5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px">
+            </label>
+          </div>
+          <p class="hint">チケットの作成にはパイプラインとステージが必須です。標準のサポートパイプライン「0」・ステージ「新規」の「1」が初期値です。社内で変更している場合はHubSpotの設定に合わせてください。</p>
+          <p class="hint">必要スコープ: tickets（チケットの作成）、取引・会社の読み取り/書き込み（関連付けと会社の自動取得）。不足している場合はエラー（403）で案内します。トークンは HubSpot の API 以外には送信しません。</p>
+          <div><button id="btnClearToken" type="button" class="btn btn-sm" style="color:var(--danger)">保存済みトークンを削除</button></div>
         </div>
-        <p class="text-xs text-slate-500">チケットの作成にはパイプラインとステージが必須です。標準のサポートパイプライン「0」・ステージ「新規」の「1」が初期値です。社内で変更している場合はHubSpotの設定に合わせてください。</p>
-        <p class="text-xs text-slate-500">必要スコープ: tickets（チケットの作成）、取引・会社の読み取り/書き込み（関連付けと会社の自動取得）。不足している場合はエラー（403）で案内します。トークンは HubSpot の API 以外には送信しません。</p>
-        <button id="btnClearToken" type="button" class="text-xs text-red-600 underline">保存済みトークンを削除</button>
       </div>
     </details>
   </section>
 
   <!-- ===================== 右カラム：プレビュー＆連携 ===================== -->
-  <section class="space-y-6">
+  <section class="col-right" aria-label="発注書プレビュー">
 
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-      <div class="flex flex-wrap items-center gap-2 mb-1">
-        <h2 class="font-bold">■ 制作発注書プレビュー（編集可能）</h2>
-        <span id="previewKind" class="rounded-full bg-indigo-100 px-3 py-0.5 text-xs font-bold text-indigo-800"></span>
+    <div class="card">
+      <div class="card-head">
+        <span class="step-no">3</span>
+        <h2 class="card-title">発注書プレビュー（編集可能）</h2>
+        <span id="previewKind" class="pill pill-brand"></span>
+        <span class="head-note"><span class="req-star">*</span> は着工に必要な必須項目</span>
       </div>
-      <div class="mt-3 mb-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-        <h3 class="text-sm font-bold mb-3">基本情報</h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <label class="block">
-            <span class="text-sm font-medium">商材</span>
-            <select id="product" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 bg-white">
-              <option value="nest">nest</option>
-              <option value="RAQMO">RAQMO</option>
-              <option value="その他">その他</option>
-            </select>
-          </label>
-          <label class="block">
-            <span class="text-sm font-medium">顧客名（会社名）</span>
-            <span id="clientAuto" class="hidden rounded bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700">自動抽出・要目視確認</span>
-            <input id="client" type="text" placeholder="株式会社○○" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
-          </label>
-          <label class="block">
-            <span class="text-sm font-medium">担当営業</span>
-            <input id="sales" type="text" placeholder="○○" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2">
-          </label>
-          <div class="block sm:col-span-2">
-            <span class="text-sm font-medium">HubSpot 紐づけ先</span>
-            <div class="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <input id="hsDealId" type="text" inputmode="numeric" placeholder="取引ID（必須）例: 11838525" class="min-w-0 rounded-lg border border-slate-300 px-3 py-2">
-              <input id="hsCompanyId" type="text" inputmode="numeric" placeholder="会社ID（任意）" class="min-w-0 rounded-lg border border-slate-300 px-3 py-2">
+      <div class="card-body">
+        <p id="previewNote" class="hint"></p>
+
+        <div class="basic">
+          <h3 class="basic-title">基本情報</h3>
+          <div class="grid-2">
+            <label>
+              <span class="label">商材</span>
+              <select id="product" class="control" style="margin-top:5px">
+                <option value="nest">nest</option>
+                <option value="RAQMO">RAQMO</option>
+                <option value="その他">その他</option>
+              </select>
+            </label>
+            <label>
+              <span class="label">顧客名（会社名）</span>
+              <span id="clientAuto" class="pill pill-info hidden" style="margin-left:6px">自動抽出・要目視確認</span>
+              <input id="client" type="text" placeholder="株式会社○○" class="control" style="margin-top:5px">
+            </label>
+            <label>
+              <span class="label">担当営業</span>
+              <input id="sales" type="text" placeholder="○○" class="control" style="margin-top:5px">
+            </label>
+            <div style="grid-column:1/-1">
+              <span class="label">HubSpot 紐づけ先</span>
+              <div class="grid-2" style="margin-top:5px">
+                <input id="hsDealId" type="text" inputmode="numeric" placeholder="取引ID（必須）例: 11838525" class="control" aria-label="HubSpot 取引ID">
+                <input id="hsCompanyId" type="text" inputmode="numeric" placeholder="会社ID（任意）" class="control" aria-label="HubSpot 会社ID">
+              </div>
+              <p class="hint" style="margin-top:6px">発注書は<b>新しいチケット</b>として作成され、ここで指定した<b>取引</b>と<b>会社</b>に紐づきます。会社IDを空にすると、取引に紐づく会社を自動で取得します。IDは、HubSpotのレコード画面のURL末尾の数字です。</p>
             </div>
-            <p class="mt-1 text-xs text-slate-500">発注書は<b>新しいチケット</b>として作成され、ここで指定した<b>取引</b>と<b>会社</b>に紐づきます。会社IDを空にすると、取引に紐づく会社を自動で取得します。IDは、HubSpotのレコード画面のURL末尾の数字です。</p>
           </div>
         </div>
+
+        <div class="stack">
+          <div id="orderFields" class="stack"></div>
+          <div id="productWrap" class="section">
+            <div class="section-head static"><h3 id="productTitle" class="section-title"></h3></div>
+            <div id="productFields" class="section-body"></div>
+          </div>
+          <div id="notesWrap"></div>
+        </div>
       </div>
-      <p id="previewNote" class="text-xs text-slate-500 mb-1"></p>
-      <p class="text-xs text-slate-500 mb-4"><span class="text-red-600 font-bold">*</span> は着工に必要な必須項目です。</p>
-      <div id="orderFields" class="space-y-4"></div>
-      <div id="productWrap" class="mt-6 border-t border-slate-200 pt-4">
-        <h3 id="productTitle" class="text-sm font-bold mb-3"></h3>
-        <div id="productFields" class="space-y-4"></div>
-      </div>
-      <div class="mt-6 border-t border-slate-200 pt-4" id="notesWrap"></div>
     </div>
 
-    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
-      <h2 class="font-bold mb-3">■ アクション</h2>
-      <div class="space-y-3">
-        <button id="btnCopyConfirm" type="button" class="w-full rounded-lg bg-orange-500 px-4 py-3 font-bold text-white hover:bg-orange-600">🟠 営業への不足確認文をコピー</button>
-        <button id="btnCopyOrder" type="button" class="w-full rounded-lg bg-slate-700 px-4 py-3 font-bold text-white hover:bg-slate-800">📋 発注書テキストをコピー</button>
-        <button id="btnHubSpot" type="button" class="w-full rounded-lg bg-blue-600 px-4 py-3 font-bold text-white hover:bg-blue-700 disabled:opacity-60">🎫 HubSpotにチケットを作成して転記</button>
+    <div class="actionbar">
+      <div id="apiError" class="alert alert-danger hidden"></div>
+      <div id="apiResult" class="alert alert-ok hidden"></div>
+      <div class="actionbar-row">
+        <button id="btnCopyConfirm" type="button" class="btn"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg>不足確認文をコピー</button>
+        <button id="btnCopyOrder" type="button" class="btn"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg>発注書をコピー</button>
+        <button id="btnHubSpot" type="button" class="btn btn-primary btn-lg"><svg class="icon" aria-hidden="true"><use href="#i-send"/></svg><span class="btn-label">HubSpotにチケットを作成して転記</span></button>
       </div>
-      <div id="apiError" class="hidden mt-4 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 whitespace-pre-wrap"></div>
-      <div id="apiResult" class="hidden mt-4 rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-800 whitespace-pre-wrap"></div>
     </div>
   </section>
 </main>
 
-<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 hidden rounded-lg px-5 py-3 text-sm font-bold text-white shadow-lg z-50"></div>
+<div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
 <script>
 (() => {
@@ -200,7 +419,7 @@
   //   req  : そのセクションが「対象」のとき必須
   //   when : セクションが対象になる条件（ACTIVE_WHEN のキー）。対象外でも入力は任意
   // 認証情報（メール・パスワード）は文字起こしから自動抽出しない。
-  const MARK_PH = '●（個数・販促期間などの詳細も追記）';
+  const MARK_PH = '●（個数・期間などの詳細も）';
   const PW_HINT = 'お客様が明言した場合のみ入力（不明は「ヒアリング」）。発注書とHubSpotに平文で転記されます';
   const FREQ_OPTIONS = ['毎月', '半年', '一年'];
   const DASH_LONG = '-'.repeat(80);
@@ -355,7 +574,8 @@
   const values = { freq: '半年', mt_igpw: 'ヒアリング' };   // 全フィールドの値（商材切替でも保持）。初期値は既定値
   const autoFilled = new Set(); // 自動抽出された（未編集の）フィールド
   const els = {};               // id -> { ta, badge, auto, star, warn, f }
-  const secEls = {};            // セクションid -> { sec, note }
+  const secEls = {};            // セクションid -> { sec, note, body, head, when, offNote, userToggled, open, collapsed }
+  let reviewed = false;         // 解析（または不足確認）のあと。未確定の表示は、確認が始まってから出す
 
   /* ---------- ユーティリティ ---------- */
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -369,7 +589,7 @@
   function toast(msg, ok = true) {
     const t = $('toast');
     t.textContent = msg;
-    t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 rounded-lg px-5 py-3 text-sm font-bold text-white shadow-lg z-50 ' + (ok ? 'bg-green-600' : 'bg-red-600');
+    t.className = 'toast ' + (ok ? 'toast-ok' : 'toast-err');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => t.classList.add('hidden'), 3500);
   }
@@ -470,13 +690,13 @@
     $('speakerWrap').classList.toggle('hidden', !names.length);
     for (const n of names) {
       const row = document.createElement('label');
-      row.className = 'flex items-center gap-2 text-sm';
+      row.className = 'role-row';
       const nm = document.createElement('span');
-      nm.className = 'w-44 truncate';
+      nm.className = 'role-name';
       nm.textContent = n;
       nm.title = n;
       const sel = document.createElement('select');
-      sel.className = 'rounded-lg border border-slate-300 bg-white px-2 py-1';
+      sel.className = 'control control-sm';
       for (const [v, t] of [['sales', '営業'], ['customer', 'お客様']]) {
         const op = document.createElement('option');
         op.value = v;
@@ -810,20 +1030,21 @@
 
   function makeField(f) {
     const wrap = document.createElement('div');
+    wrap.className = f.type === 'area' ? 'field span-2' : 'field';
     const head = document.createElement('div');
-    head.className = 'flex items-center gap-2 mb-1 flex-wrap';
+    head.className = 'field-head';
     const label = document.createElement('label');
-    label.className = 'text-sm font-medium';
+    label.className = 'label';
     label.textContent = f.label;
     const star = document.createElement('span');   // 必須マーク（requiredList に応じて表示）
-    star.className = 'hidden text-red-600 font-bold';
+    star.className = 'req-star hidden';
     star.textContent = ' *';
     label.appendChild(star);
     const badge = document.createElement('span');
-    badge.className = 'hidden rounded bg-red-600 px-2 py-0.5 text-xs font-bold text-white';
+    badge.className = 'pill pill-danger hidden';
     badge.textContent = MISSING;
     const auto = document.createElement('span');
-    auto.className = 'hidden rounded bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700';
+    auto.className = 'pill pill-info hidden';
     auto.textContent = '自動抽出・要目視確認';
     head.append(label, badge, auto);
 
@@ -845,7 +1066,9 @@
     }
     ta.placeholder = f.ph || '';
     ta.value = values[f.id] || '';
-    ta.className = 'w-full rounded-lg border px-3 py-2 text-sm';
+    ta.className = 'control';
+    ta.id = 'f_' + f.id;
+    label.htmlFor = ta.id;
     const onInput = () => {
       values[f.id] = ta.value;
       autoFilled.delete(f.id);
@@ -857,11 +1080,11 @@
     ta.addEventListener('change', onInput);
 
     const warn = document.createElement('p');
-    warn.className = 'hidden mt-1 text-xs font-bold text-amber-700';
+    warn.className = 'warn hidden';
     wrap.appendChild(head);
     if (f.hint) {
       const hint = document.createElement('p');
-      hint.className = 'mb-1 text-xs text-slate-500';
+      hint.className = 'hint';
       hint.textContent = f.hint;
       wrap.appendChild(hint);
     }
@@ -870,38 +1093,51 @@
     return wrap;
   }
 
+  // 見出し文字（ひな形の「■」「＜＞」「【】」は画面では外す。出力のひな形には影響しない）
+  const sectionTitle = (sec) => (sec.head || sec.ui).replace(/^[■＜【]+/, '').replace(/[＞】]+$/, '');
+
   function renderSections(box, sections) {
     for (const s of sections) {
       const sec = document.createElement('div');
-      sec.className = 'rounded-lg border border-slate-200 p-4 space-y-3';
+      sec.className = 'section';
       const head = document.createElement('div');
-      head.className = 'flex flex-wrap items-center gap-2';
+      head.className = 'section-head';
       const h = document.createElement('h3');
-      h.className = 'text-sm font-bold text-indigo-900';
-      h.textContent = s.head || s.ui;
+      h.className = 'section-title';
+      h.textContent = sectionTitle(s);
       const note = document.createElement('span');
-      note.className = 'hidden rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-600';
+      note.className = 'pill pill-muted hidden';
       note.textContent = s.offNote || '';
       head.append(h, note);
-      sec.appendChild(head);
+      head.insertAdjacentHTML('beforeend', '<svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>');
+      const body = document.createElement('div');
+      body.className = 'section-body';
       if (s.note) {
         const p = document.createElement('p');
-        p.className = 'text-xs text-slate-500';
+        p.className = 'section-note';
         p.textContent = s.note;
-        sec.appendChild(p);
+        body.appendChild(p);
       }
       for (const it of s.items) {
         if (it.text !== undefined) {
           const p = document.createElement('p');
-          p.className = 'pt-1 text-xs font-bold text-slate-500';
+          p.className = 'sub-label';
           p.textContent = it.text;
-          sec.appendChild(p);
+          body.appendChild(p);
         } else {
-          sec.appendChild(makeField({ ...it, label: nestLabel(it) }));
+          body.appendChild(makeField({ ...it, label: nestLabel(it) }));
         }
       }
+      sec.append(head, body);
       box.appendChild(sec);
-      secEls[s.id] = { sec, note };
+      const e = { sec, note, body, head, when: s.when, offNote: !!s.offNote, userToggled: false, open: true, collapsed: false };
+      secEls[s.id] = e;
+      // 見出しの押下で開閉。対象外のセクションは初期状態で畳む（押すと開く）
+      head.tabIndex = 0;
+      head.setAttribute('role', 'button');
+      const toggle = () => { e.userToggled = true; e.open = e.collapsed; refreshAll(); };
+      head.addEventListener('click', toggle);
+      head.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } });
     }
   }
 
@@ -911,14 +1147,15 @@
     box.textContent = '';
     notes.textContent = '';
     if (isNest()) { renderSections(box, NEST_SECTIONS); return; }
-    FIELDS.forEach(f => box.appendChild(makeField({ ...f, type: 'area' })));
+    // 制作発注の項目（案件概要・ターゲット・トンマナ・参考URL・提供素材）
+    renderSections(box, [{ id: 'legacy', ui: '案件内容', when: 'always', items: FIELDS.map(f => ({ ...f, out: f.label, type: 'area' })) }]);
     if ($('product').value === 'RAQMO') renderSections(box, PROMO_SECTIONS);   // 販促（MEETO / MOEL / MOFUL）
-    notes.appendChild(makeField({ id: 'notes', label: '備考・その他共有事項', type: 'area', rows: 2, ph: '自由記入' }));
+    renderSections(notes, [{ id: 'notes_sec', ui: '備考', when: 'always', items: [{ id: 'notes', out: '備考', label: '備考・その他共有事項', type: 'area', rows: 2, ph: '自由記入' }] }]);
   }
 
   function renderProductFields() {
     const p = $('product').value;
-    $('productTitle').textContent = `■ 商材別特記事項（${p}）`;
+    $('productTitle').textContent = `商材別特記事項（${p}）`;
     const box = $('productFields');
     box.textContent = '';
     for (const f of PRODUCT_FIELDS[p] || []) {
@@ -936,6 +1173,7 @@
     $('productWrap').classList.toggle('hidden', nest);
     $('notesWrap').classList.toggle('hidden', nest);
     $('previewKind').textContent = nest ? 'nest用ひな形' : `${$('product').value}用の項目`;
+    $('productPill').textContent = $('product').value;
     $('previewNote').textContent = nest
       ? 'nestの発注ひな形（受注・販促商品／nest本体／AUTO／AIO／AIO-RAQMO付／イレギュラー）の全項目です。この形式のテキストがHubSpotのチケットに入ります。'
       : '制作発注の項目（案件概要・ターゲット・トンマナ・参考URL・提供素材）です。RAQMOでは販促（MEETO・MOEL・MOFUL）の詳細も記入します。商材をnestにするとnestの発注ひな形に切り替わります。';
@@ -966,22 +1204,25 @@
     const reqMap = new Map(requiredList().map(r => [r.id, r]));
     for (const [id, e] of Object.entries(els)) {
       const r = reqMap.get(id);
-      const missing = !!r && !r.ok;
+      const missing = !!r && !r.ok && reviewed;   // 未確定の強調は、解析などの確認が始まってから出す
       e.star.classList.toggle('hidden', !r);
       e.badge.classList.toggle('hidden', !missing);
       e.auto.classList.toggle('hidden', !autoFilled.has(id));
-      e.ta.className = 'w-full rounded-lg border px-3 py-2 text-sm ' +
-        (missing ? 'border-red-500 bg-red-50 ring-1 ring-red-400' : 'border-slate-300 bg-white');
+      e.ta.className = 'control' + (missing ? ' is-missing' : '');
       const w = e.f.warn ? e.f.warn((values[id] || '').trim()) : '';
       e.warn.textContent = w;
       e.warn.classList.toggle('hidden', !w);
     }
-    for (const s of sectionsFor()) {
-      const e = secEls[s.id];
-      if (!e) continue;
-      const off = !ACTIVE_WHEN[s.when]();
-      e.note.classList.toggle('hidden', !off || !s.offNote);
-      e.sec.classList.toggle('opacity-60', off);
+    for (const e of Object.values(secEls)) {
+      const off = e.when ? !ACTIVE_WHEN[e.when]() : false;
+      const collapsed = e.userToggled ? !e.open : off;
+      const wasCollapsed = e.collapsed;
+      e.collapsed = collapsed;
+      e.note.classList.toggle('hidden', !off || !e.offNote);
+      e.body.classList.toggle('hidden', collapsed);
+      e.sec.classList.toggle('is-collapsed', collapsed);
+      e.head.setAttribute('aria-expanded', String(!collapsed));
+      if (wasCollapsed && !collapsed) e.body.querySelectorAll('textarea').forEach(autosize);   // 開いたときに高さを合わせる
     }
   }
 
@@ -1132,7 +1373,7 @@
     const pipeline = $('hsPipeline').value.trim();
     const stage = $('hsStage').value.trim();
     if (!token) { $('hsSettings').open = true; showApiError('HubSpotのアクセストークンが未設定です。左カラム「2. HubSpot接続設定」で入力してください。'); return; }
-    if (!/^\d+$/.test(dealId)) { showApiError('HubSpot 取引IDは数字で入力してください（右カラム「制作発注書プレビュー」の基本情報）。'); return; }
+    if (!/^\d+$/.test(dealId)) { showApiError('HubSpot 取引IDは数字で入力してください（右カラム「発注書プレビュー」の基本情報）。'); return; }
     if (companyId && !/^\d+$/.test(companyId)) { showApiError('HubSpot 会社IDは数字で入力してください（空欄なら取引から自動取得します）。'); return; }
     if (!prop || !pipeline || !stage) { $('hsSettings').open = true; showApiError('チケットのプロパティ名・パイプラインID・ステージIDを入力してください（左カラム「2. HubSpot接続設定」）。'); return; }
 
@@ -1142,8 +1383,9 @@
     if (!confirm(`チケットを新規作成し、取引 ${dealId} ${companyId ? `・会社 ${companyId}` : '・会社（取引から自動取得）'} に紐づけます。よろしいですか？`)) return;
 
     const btn = $('btnHubSpot');
+    const btnLabel = btn.querySelector('.btn-label');
     btn.disabled = true;
-    btn.textContent = '送信中…';
+    btnLabel.textContent = '送信中…';
     try {
       // 会社IDが空なら、取引に紐づく会社を取得する
       if (!companyId) {
@@ -1180,13 +1422,13 @@
         'HubSpotと通信できませんでした（チケットは作成されていません）。\n' +
         '・インターネット接続を確認してください。\n' +
         '・HubSpot APIはブラウザからの直接呼び出し（CORS）を拒否する場合があります。その場合は、' +
-        '「📋 発注書テキストをコピー」でHubSpotのチケットへ手動貼り付けしてください。\n' +
+        '「発注書をコピー」でHubSpotのチケットへ手動貼り付けしてください。\n' +
         '詳細: ' + (err && err.message ? err.message : err)
       );
       toast('通信に失敗しました', false);
     } finally {
       btn.disabled = false;
-      btn.textContent = '🎫 HubSpotにチケットを作成して転記';
+      btnLabel.textContent = 'HubSpotにチケットを作成して転記';
     }
   }
 
@@ -1238,6 +1480,7 @@
       $('clientAuto').classList.remove('hidden');
       n++;
     }
+    reviewed = true;
     refreshAll();
     toast(n ? `${n}項目を自動抽出しました。内容を確認してください` : '抽出できた項目がありません。手動で入力してください', n > 0);
   }
@@ -1287,9 +1530,9 @@
     box.textContent = '';
     for (const row of startUrls) {
       const line = document.createElement('div');
-      line.className = 'flex items-center gap-2 text-xs';
+      line.className = 'url-row';
       const sel = document.createElement('select');
-      sel.className = 'shrink-0 rounded-lg border border-slate-300 bg-white px-2 py-1';
+      sel.className = 'control control-sm';
       for (const [v, t] of URL_CATS) {
         const op = document.createElement('option');
         op.value = v;
@@ -1299,7 +1542,7 @@
       sel.value = row.cat;
       sel.addEventListener('change', () => { row.cat = sel.value; });
       const span = document.createElement('span');
-      span.className = 'min-w-0 flex-1 truncate text-left';
+      span.className = 'url-text';
       span.textContent = row.url;
       span.title = row.url;
       line.append(sel, span);
@@ -1381,6 +1624,8 @@
     $('product').value = p;
     const start = $('startScreen');
     if (start) start.remove();
+    $('productPill').classList.remove('hidden');
+    $('btnRestart').classList.remove('hidden');
     renderAll();
     const { n, skipped } = applyStartUrls();
     refreshAll();
@@ -1447,6 +1692,8 @@
     $('btnAnalyze').addEventListener('click', runAnalyze);
     $('client').addEventListener('input', () => $('clientAuto').classList.add('hidden'));
     $('btnCopyConfirm').addEventListener('click', async () => {
+      reviewed = true;
+      refreshAll();
       const ok = await copyText(buildConfirmMessage());
       toast(ok ? '確認文をコピーしました' : 'コピーに失敗しました', ok);
     });
@@ -1456,6 +1703,11 @@
     });
     $('btnHubSpot').addEventListener('click', sendToHubSpot);
     $('btnClipboard').addEventListener('click', importFromClipboard);
+    $('btnRestart').addEventListener('click', () => {
+      const edited = $('transcript').value.trim() || Object.keys(values).some(k => values[k] && !defaultIds.has(k));
+      if (edited && !confirm('入力した内容は消えます。案件の選択からやり直しますか？')) return;
+      location.assign(location.pathname);
+    });
     $('transcript').addEventListener('paste', () => setTimeout(runAnalyze, 0));   // 貼り付けたらそのまま解析
     setupStartScreen();
   }
