@@ -83,6 +83,7 @@
   .alert { border-radius: 10px; padding: 10px 12px; font-size: 13px; white-space: pre-wrap; margin-bottom: 10px; }
   .alert-danger { background: var(--danger-soft); border: 1px solid var(--danger-line); color: #8c1738; }
   .alert-ok { background: var(--ok-soft); border: 1px solid var(--ok-line); color: #0a5a40; }
+  .alert-info { background: var(--info-soft); border: 1px solid #b6d6f7; color: #0a4f96; }
 
   /* ===== レイアウト ===== */
   .layout { max-width: 1360px; margin: 0 auto; padding: 24px; display: grid; grid-template-columns: minmax(340px, 5fr) minmax(0, 7fr); gap: 24px; align-items: start; }
@@ -273,14 +274,47 @@
           <div id="speakerRoles" class="role-list"></div>
         </div>
 
-        <button id="btnAnalyze" type="button" class="btn btn-primary btn-lg btn-block"><svg class="icon" aria-hidden="true"><use href="#i-wand"/></svg>自動解析して発注書に反映</button>
-        <p class="hint" style="margin-top:10px">※ 解析はブラウザ内のルールベースで行います（AI・外部送信なし）。抽出結果は必ず目視で確認してください。</p>
+        <button id="btnAnalyze" type="button" class="btn btn-primary btn-lg btn-block"><svg class="icon" aria-hidden="true"><use href="#i-wand"/></svg><span id="analyzeLabel">自動解析して発注書に反映</span></button>
+        <div id="aiStatus" class="alert hidden" style="margin:12px 0 0" role="status"></div>
+        <p class="hint" style="margin-top:10px">※ 解析は、初期設定ではブラウザ内のルールベースで行います（AI・外部送信なし）。「AI解析の設定」をオンにすると、AIが会話の流れを読んで精度を上げます。抽出結果は必ず目視で確認してください。</p>
       </div>
     </div>
 
-    <details id="hsSettings" class="card">
+    <details id="aiSettings" class="card">
       <summary>
         <span class="step-no">2</span>
+        <span class="card-title">AI解析の設定</span>
+        <span id="aiPill" class="pill pill-muted">オフ</span>
+        <svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </summary>
+      <div class="card-body">
+        <div class="form-stack">
+          <p class="hint">規則ベースの解析に加えて、AI（Claude）が<b>会話の流れ</b>を読み、お客様の事業・強み・困りごと・やりたいこと・要望などを発注書に入れます。営業の提案にお客様がうなずいた内容も踏まえます。<b>オンにすると、文字起こしと項目の定義が Anthropic の API（api.anthropic.com）へ送信されます。</b>お客様の情報が含まれるため、社内の取り扱いルールに沿って使ってください。初期値はオフです。</p>
+          <label class="check-row">
+            <input id="aiEnabled" type="checkbox">
+            解析のときにAIも使う
+          </label>
+          <label>
+            <span class="label">Anthropic APIキー</span>
+            <input id="aiKey" type="password" autocomplete="off" placeholder="sk-ant-..." class="control" style="margin-top:5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px">
+          </label>
+          <label class="check-row">
+            <input id="aiRemember" type="checkbox">
+            このブラウザのLocalStorageに保存する（共有PCでは非推奨）
+          </label>
+          <label>
+            <span class="label">モデル</span>
+            <select id="aiModel" class="control" style="margin-top:5px"></select>
+          </label>
+          <p class="hint">料金は、モデルと文字起こしの長さによって、1回の解析ごとにAPI利用料がかかります（解析後に、使ったトークン数を表示します）。APIキーは、このブラウザにだけ保存され、Anthropic以外へは送信しません。AIが失敗しても、規則ベースの解析結果はそのまま残ります。</p>
+          <div><button id="btnClearAiKey" type="button" class="btn btn-sm" style="color:var(--danger)">保存済みのキーを削除</button></div>
+        </div>
+      </div>
+    </details>
+
+    <details id="hsSettings" class="card">
+      <summary>
+        <span class="step-no">3</span>
         <span class="card-title">HubSpot接続設定</span>
         <svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>
       </summary>
@@ -322,7 +356,7 @@
 
     <div class="card">
       <div class="card-head">
-        <span class="step-no">3</span>
+        <span class="step-no">4</span>
         <h2 class="card-title">発注書プレビュー（編集可能）</h2>
         <span id="previewKind" class="pill pill-brand"></span>
         <span class="head-note"><span class="req-star">*</span> は着工に必要な必須項目</span>
@@ -394,6 +428,9 @@
   /* ---------- 発注書フィールド定義 ---------- */
   const FIELDS = [
     { id: 'overview',  label: '案件概要・制作目的',        critical: true,  rows: 3, ph: '例: LPリニューアル。問い合わせ数の増加が目的' },
+    { id: 'business',  label: '何をしている会社か・売り込みたいこと', critical: false, rows: 2, ph: '例: 京都で30年続く洋菓子店。看板商品のシュークリームを売り込みたい' },
+    { id: 'trouble',   label: '今困っていること',          critical: false, rows: 2, ph: '例: Instagramを更新する時間がなく、お店の魅力が伝わっていない' },
+    { id: 'strength',  label: '会社・お店の強み・特徴',     critical: false, rows: 2, ph: '例: 創業30年の実績、看板のシュークリーム、口コミ評価4.3' },
     { id: 'target',    label: 'ターゲット層 / 想定ユーザー', critical: true,  rows: 2, ph: '例: 40〜50代の男性経営者' },
     { id: 'tone',      label: 'デザインのトーン＆マナー',   critical: false, rows: 2, ph: '例: シンプル、高級感、青ベース' },
     { id: 'urls',      label: '参考サイト・競合URL',       critical: true,  rows: 3, ph: 'https://example.com/（1行に1件）' },
@@ -926,6 +963,7 @@
     const text = utts.map(u => u.text).join('\n');
     const res = {
       client:    extractClient(sl),
+      ...extractProfile(sl),
       overview:  extractOverview(sl),
       target:    extractTarget(sl),
       tone:      extractTone(sl),
@@ -953,6 +991,20 @@
   const PHONE_RE = /0\d{1,4}-\d{1,4}-\d{3,4}/;
   const NON_SITE_RE = /(tabelog|hotpepper|ekiten|itp\.ne\.jp|retty|gnavi|youtube|zoom\.us)/;
 
+  // 事業内容・困りごと・強み（nest・RAQMO・その他で共通）
+  function extractProfile(sl) {
+    const nonTrouble = sl.filter(x => !TROUBLE_RE.test(x.s));
+    const trouble = pickBy(sl.filter(x => TROUBLE_RE.test(x.s)), TROUBLE_RE, /(困|課題|悩み)/, 4);
+    const business = pickBy(nonTrouble, BUSINESS_RE, /(創業|事業|取り扱)/, 3);
+    const strengthAll = pickBy(nonTrouble, STRENGTH_RE, /(強み|売り|特徴)/, 4);
+    const strengthOnly = strengthAll.filter(x => !business.includes(x));
+    return {
+      trouble: trouble.join('\n'),
+      business: business.join('\n'),
+      strength: (strengthOnly.length ? strengthOnly : strengthAll).join('\n'),   // 事業内容と同じ文でも、強みが空になるよりは重ねて載せる
+    };
+  }
+
   function analyzeNest(utts) {
     const sl = sentenceList(utts);
     const text = utts.map(u => u.text).join('\n');
@@ -960,13 +1012,7 @@
     const res = { client: extractClient(sl) };
     if (/フルパック/.test(text)) res.p_full = '●';
 
-    const nonTrouble = sl.filter(x => !TROUBLE_RE.test(x.s));
-    res.trouble = pickBy(sl.filter(x => TROUBLE_RE.test(x.s)), TROUBLE_RE, /(困|課題|悩み)/, 4).join('\n');
-    const business = pickBy(nonTrouble, BUSINESS_RE, /(創業|事業|取り扱)/, 3);
-    res.business = business.join('\n');
-    const strengthAll = pickBy(nonTrouble, STRENGTH_RE, /(強み|売り|特徴)/, 4);
-    const strengthOnly = strengthAll.filter(x => !business.includes(x));
-    res.strength = (strengthOnly.length ? strengthOnly : strengthAll).join('\n');   // 事業内容と同じ文でも、強みが空になるよりは重ねて載せる
+    Object.assign(res, extractProfile(sl));
 
     // お客様の発言を先にして文を探す（営業の確認の質問は答えではない）
     const mentions = (re) => sl.filter(x => re.test(x.s)).sort((a, b) => (a.role === 'sales') - (b.role === 'sales')).map(x => x.s);
@@ -1072,6 +1118,7 @@
     const onInput = () => {
       values[f.id] = ta.value;
       autoFilled.delete(f.id);
+      aiFilled.delete(f.id);
       defaultIds.delete(f.id);
       autosize(ta);
       refreshAll();
@@ -1208,6 +1255,7 @@
       e.star.classList.toggle('hidden', !r);
       e.badge.classList.toggle('hidden', !missing);
       e.auto.classList.toggle('hidden', !autoFilled.has(id));
+      e.auto.textContent = aiFilled.has(id) ? 'AI抽出・要目視確認' : '自動抽出・要目視確認';
       e.ta.className = 'control' + (missing ? ' is-missing' : '');
       const w = e.f.warn ? e.f.warn((values[id] || '').trim()) : '';
       e.warn.textContent = w;
@@ -1372,10 +1420,10 @@
     const prop = $('hsProp').value.trim();
     const pipeline = $('hsPipeline').value.trim();
     const stage = $('hsStage').value.trim();
-    if (!token) { $('hsSettings').open = true; showApiError('HubSpotのアクセストークンが未設定です。左カラム「2. HubSpot接続設定」で入力してください。'); return; }
+    if (!token) { $('hsSettings').open = true; showApiError('HubSpotのアクセストークンが未設定です。左カラム「3. HubSpot接続設定」で入力してください。'); return; }
     if (!/^\d+$/.test(dealId)) { showApiError('HubSpot 取引IDは数字で入力してください（右カラム「発注書プレビュー」の基本情報）。'); return; }
     if (companyId && !/^\d+$/.test(companyId)) { showApiError('HubSpot 会社IDは数字で入力してください（空欄なら取引から自動取得します）。'); return; }
-    if (!prop || !pipeline || !stage) { $('hsSettings').open = true; showApiError('チケットのプロパティ名・パイプラインID・ステージIDを入力してください（左カラム「2. HubSpot接続設定」）。'); return; }
+    if (!prop || !pipeline || !stage) { $('hsSettings').open = true; showApiError('チケットのプロパティ名・パイプラインID・ステージIDを入力してください（左カラム「3. HubSpot接続設定」）。'); return; }
 
     const ready = requiredList().every(r => r.ok);
     if (!ready && !confirm('未確定の必須項目があります。このままチケットを作成しますか？')) return;
@@ -1432,6 +1480,314 @@
     }
   }
 
+  /* ---------- ⑤ AI解析（任意・オプトイン） ---------- */
+  // 規則ベースの解析に加えて、Anthropic API（Claude）で文字起こしの会話の流れを読み、発注書の項目を埋める。
+  // 初期値はオフ。オンにして利用者がAPIキーを入力したときだけ、文字起こしと項目の定義を api.anthropic.com へ送る。
+  // 認証情報（メール・パスワード等）の欄は、AIに渡さず、返ってきても反映しない。
+  const AI_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+  const AI_API_VERSION = '2026-10-21';
+  const AI_FALLBACK_BETA = 'server-side-fallback-2026-07-01';
+  const AI_MODELS = [
+    ['claude-opus-5-5', 'Claude Opus 5.5（高精度・標準）'],
+    ['claude-sonnet-5-5', 'Claude Sonnet 5.5（速い・低コスト）'],
+    ['claude-haiku-5-5', 'Claude Haiku 5.5（最安・簡易）'],
+  ];
+  const AI_NO_FALLBACK_MODEL = 'claude-haiku-5-5';   // サーバー側のフォールバックが無いモデル
+  const AI_MAX_CHARS = 400000;                       // これを超える文字起こしは送らず、分割を案内する
+  const AI_TIMEOUT_MS = 240000;
+  const AI_SKIP_IDS = new Set(['login_email', 'login_pw', 'fb_pw', 'ig_pw', 'x_pw', 'mt_igpw']);
+  const AI_MARK_IDS = new Set([...PRODUCT_IDS, 'pr_meeto', 'pr_moel', 'pr_mofl']);
+  const AI_MARK_NOTE = '契約・発注することが明確な場合だけ「●」（個数・期間などの言及があれば「●」のあとに続ける）。言及が無い・提案だけの場合は空文字';
+  const aiFilled = new Set();      // AIが入れた欄（バッジ表示用）
+  let aiBusy = false;
+  let aiLastKey = '';              // 直近に成功した解析の内容（同じ内容は再送しない）
+
+  // 項目ごとの書き方の指示（AIに渡す）。ここに無い項目は、ラベルと補足から作る
+  const AI_NOTES = {
+    overview: 'お客様が今回の制作で実現したいこと・目的・やりたいこと。お客様の言葉を生かして1〜3文。営業の自社紹介は入れない',
+    business: '何をしている会社・お店か、何を売り込みたいか（事業内容・主力商品・目標）',
+    trouble: '今困っていること。集客・求人は、どんなことに困っているかを具体的に（複数あれば改行で区切る）',
+    strength: '会社・お店としての売りや強み（実績・年数・商品・立地・評判・技術など）。代表個人の経歴や人柄は入れない',
+    target: '想定するお客様像（年代・性別・属性・地域など）',
+    tone: 'デザインの希望（雰囲気・色・参考にしたい印象）。お客様が希望または了承したものだけ',
+    urls: '参考にしたいサイト・競合サイトのURL（1行に1件）。文字起こしにあるURLだけ',
+    materials: '提供素材の有無を「ロゴ: あり / 画像・写真: なし」の形で（ロゴ・画像・写真・原稿・ワイヤーフレーム）',
+    industry: '業種を簡潔に（例: 洋菓子店、美容室）',
+    shop: '店舗名（正式表記）',
+    freq: 'コンサルティングデータプロンプトの更新頻度の希望。言及が無ければ空文字',
+    line_reg: 'nest公式LINEの登録状況（登録済み／未／回収時に登録 など）',
+    fb_has: 'Facebookの有無。「あり」または「なし」。言及が無ければ空文字',
+    ig_has: 'Instagramの有無。「あり」または「なし」。言及が無ければ空文字',
+    x_has: 'Xの有無。「あり」または「なし」。言及が無ければ空文字',
+    gbp_has: 'Googleビジネスプロフィールの有無。「あり」または「なし」。言及が無ければ空文字',
+    gbp_owner: 'GBPのオーナー権限の有無（あり／なし）。お客様が答えた場合だけ',
+    gbp_kizuna: 'KIZUNAへの権限付与の状況（済／未）。言及が無ければ空文字',
+    store_hours: '営業時間と定休日（例: 10:00〜19:00 定休:水曜）',
+    store_tel: '電話番号（文字起こしの表記のまま）',
+    store_zip: '郵便番号（例: 〒610-0000）',
+    store_addr: '住所（文字起こしの表記のまま）',
+    site_owner: 'サイトの保有者（KIZUNA作成／お客様保有／制作中（他社）など）',
+    irregular: '通常と違う約束・注意点（他社との併用、補助金、時期の制約、窓口・決裁者、連絡手段など）。無ければ空文字',
+  };
+
+  const AI_SYSTEM_PROMPT = [
+    'あなたは、営業の商談（Zoomの文字起こし）から、制作チームへ渡す発注書の項目を抜き出すアシスタントです。',
+    '',
+    '# 目的',
+    '文字起こしを最初から最後まで読み、会話の流れをつかんだうえで、発注書の各項目に、制作チームがそのまま使える形で記入します。',
+    'お客様の事業、強み、困りごと、やりたいこと・要望を取りこぼさないでください。',
+    '',
+    '# 守ること',
+    '1. 事実だけを書く。文字起こしに根拠が無いことは書かない（推測・創作は禁止）。言及が無い項目は空文字にする。',
+    '2. 話者は「[営業]」（KIZUNA側。サービスを提案・説明する人）と「[お客様]」（発注する側）に分けてある。お客様の事業・強み・困りごと・希望を優先する。営業の自社紹介・サービス説明・料金・自社の実績は、お客様の項目に入れない。',
+    '3. 営業が提案・確認した内容に、お客様が「はい」「そうですね」「お願いします」などと肯定した場合は、お客様の希望として採用する。否定・保留（「ちょっと違う」「検討します」など）された提案は採用しない。お客様があとから訂正した場合は、訂正後を採用する。',
+    '4. 会話の流れ（話題の転換、言い直し、訂正、最後に合意した内容）を読む。日付や数字は、何についての話かを確かめてから使う（打ち合わせの日程を納期などと取り違えない）。',
+    '5. 話し言葉を、発注書に載せる簡潔で意味の通る日本語に整える（言いよどみは除く）。固有名詞・数字・電話番号・住所・URLは、文字起こしの表記のままにする。1項目は3文以内を目安にし、複数あるときは改行で区切る。',
+    '6. 強みは、会社・お店としての売り（実績・年数・商品・サービス・立地・評判・技術など）。代表個人の経歴や人柄は入れない。',
+    '7. メールアドレス・パスワード・ID・トークンなどの認証情報は、絶対に書かない。',
+    '8. 音声認識の誤りが疑われる固有名詞・電話番号・住所・数字は、そのまま入れたうえで、confirm_points に「何を確認すべきか」を1行で書く。',
+    '9. 選択式の項目は、示された選択肢のどれかにする。言及が無ければ空文字にする。',
+    '',
+    '# 出力',
+    '指定されたJSONスキーマに従い、すべての項目を出力する（言及が無い項目は空文字）。',
+  ].join('\n');
+
+  const aiActive = () => $('aiEnabled').checked;
+
+  function setAiStatus(kind, msg) {
+    const box = $('aiStatus');
+    if (!msg) { box.classList.add('hidden'); box.textContent = ''; return; }
+    box.className = 'alert alert-' + kind;
+    box.style.margin = '12px 0 0';
+    box.textContent = msg;
+  }
+
+  function updateAiLabels() {
+    const on = aiActive();
+    $('analyzeLabel').textContent = on ? 'AIで読み取って発注書に反映' : '自動解析して発注書に反映';
+    $('aiPill').textContent = on ? 'オン' : 'オフ';
+    $('aiPill').className = 'pill ' + (on ? 'pill-brand' : 'pill-muted');
+  }
+
+  // 現在の商材の項目を、AIに渡す形にする（認証情報の欄は含めない）
+  function aiFieldSpecs() {
+    const specs = [{ id: 'client', desc: '顧客名（会社名・店名・屋号）。「株式会社」などを含む正式な表記' }];
+    const add = (it) => {
+      if (it.text !== undefined || AI_SKIP_IDS.has(it.id)) return;
+      let desc = AI_NOTES[it.id] || [nestLabel(it), it.hint].filter(Boolean).join('。');
+      if (AI_MARK_IDS.has(it.id)) desc = `${nestLabel(it)}: ${AI_MARK_NOTE}`;
+      specs.push({ id: it.id, desc, opts: it.type === 'choice' ? it.opts : null });
+    };
+    if (isNest()) {
+      NEST_SECTIONS.forEach(sec => sec.items.forEach(add));
+    } else {
+      FIELDS.forEach(f => add({ ...f, type: 'area' }));
+      if (isRaqmo()) PROMO_SECTIONS.forEach(sec => sec.items.forEach(add));
+    }
+    return specs;
+  }
+
+  function buildAiSchema(specs) {
+    const properties = {};
+    for (const sp of specs) {
+      properties[sp.id] = sp.opts
+        ? { type: 'string', enum: [...sp.opts, ''], description: sp.desc }
+        : { type: 'string', description: sp.desc };
+    }
+    properties.confirm_points = { type: 'string', description: '音声認識の誤りが疑われる点や、営業があとで確認すべき点（1行に1件。無ければ空文字）' };
+    return { type: 'object', properties, required: Object.keys(properties), additionalProperties: false };
+  }
+
+  // 話者の役割つきの文字起こし
+  function aiTranscriptText() {
+    return utterances.map(u => {
+      const role = roleOf(u.speaker);
+      const tag = role === 'sales' ? '営業' : role === 'customer' ? 'お客様' : '発言';
+      return `[${tag}]${u.speaker ? ' ' + u.speaker : ''}: ${u.text}`;
+    }).join('\n');
+  }
+
+  function buildAiUserMessage(transcript) {
+    const product = isNest() ? 'nest' : isRaqmo() ? 'RAQMO（制作発注）' : 'その他の制作発注';
+    const sales = $('sales').value.trim();
+    const client = $('client').value.trim();
+    const head = [`商材: ${product}`, sales ? `担当営業: ${sales}` : '', client ? `顧客名（入力済み）: ${client}` : ''].filter(Boolean).join('\n');
+    return `${head}\n\n# 文字起こし（[営業]=KIZUNA側、[お客様]=発注する顧客側）\n${transcript}`;
+  }
+
+  async function callAnthropic({ key, model, user, schema }) {
+    const send = async (withFallback) => {
+      const headers = {
+        'content-type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': AI_API_VERSION,
+        'anthropic-dangerous-direct-browser-access': 'true',   // ブラウザから直接呼ぶために必要
+      };
+      const body = {
+        model,
+        max_tokens: 16000,
+        system: AI_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: user }],
+        output_config: { effort: 'high', format: { type: 'json_schema', schema } },
+      };
+      if (withFallback) { headers['anthropic-beta'] = AI_FALLBACK_BETA; body.fallbacks = 'default'; }
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), AI_TIMEOUT_MS);
+      try {
+        const res = await fetch(AI_ENDPOINT, { method: 'POST', headers, body: JSON.stringify(body), signal: ctl.signal });
+        let json = null;
+        try { json = await res.json(); } catch { /* JSONでない応答 */ }
+        return { res, json };
+      } finally {
+        clearTimeout(timer);
+      }
+    };
+    const useFallback = model !== AI_NO_FALLBACK_MODEL;
+    let r = await send(useFallback);
+    // フォールバック指定が通らない場合は、外して1回だけやり直す（400は課金されない）
+    if (useFallback && r.res.status === 400) r = await send(false);
+    return r;
+  }
+
+  const AI_HINTS = {
+    400: 'リクエストが受け付けられませんでした。',
+    401: 'APIキーが無効です。キーを確認してください。',
+    403: 'このAPIキーでは利用できません（権限や組織の設定を確認してください）。',
+    404: '指定したモデルが見つかりません（モデルの利用権限を確認してください）。',
+    413: 'リクエストが大きすぎます。文字起こしを分けてください。',
+    429: 'リクエストが多すぎます。少し待ってから、もう一度お試しください。',
+  };
+  function aiErrorText(res, json) {
+    const detail = json && json.error && json.error.message ? `\n詳細: ${json.error.message}` : '';
+    const hint = AI_HINTS[res.status] || (res.status >= 500 ? 'Anthropic側が混み合っています。少し待ってから、もう一度お試しください。' : 'AIの呼び出しに失敗しました。');
+    return `AIの解析に失敗しました（HTTP ${res.status}）。${hint}${detail}`;
+  }
+
+  // AIの結果を欄に反映する。手入力済みの欄・起動時のURL・認証情報の欄・選択肢にない値は反映しない
+  function applyAiResult(obj, specs) {
+    const specMap = new Map(specs.map(sp => [sp.id, sp]));
+    let n = 0;
+    for (const [id, raw] of Object.entries(obj || {})) {
+      const sp = specMap.get(id);
+      if (!sp || typeof raw !== 'string' || AI_SKIP_IDS.has(id)) continue;
+      const v = raw.trim();
+      if (!v) continue;
+      if (sp.opts && !sp.opts.includes(v)) continue;
+      if (id === 'client') {
+        const input = $('client');
+        if (!input.value.trim() || !$('clientAuto').classList.contains('hidden')) {
+          input.value = v;
+          $('clientAuto').textContent = 'AI抽出・要目視確認';
+          $('clientAuto').classList.remove('hidden');
+          n++;
+        }
+        continue;
+      }
+      if (filled(id) && !autoFilled.has(id) && !defaultIds.has(id)) continue;   // 手入力済み
+      if (lockedIds.has(id) && filled(id)) continue;                              // 起動時に貼ったURLを優先
+      values[id] = v;
+      autoFilled.add(id);
+      aiFilled.add(id);
+      if (els[id]) { els[id].ta.value = v; autosize(els[id].ta); }
+      n++;
+    }
+    return n;
+  }
+
+  async function runAiAnalyze() {
+    if (aiBusy) return;
+    const key = $('aiKey').value.trim();
+    if (!key) {
+      $('aiSettings').open = true;
+      setAiStatus('danger', 'AI解析がオンですが、Anthropic APIキーが未入力です。左カラム「2. AI解析の設定」で入力してください。規則ベースの解析結果は反映済みです。');
+      return;
+    }
+    if (!utterances.length) return;
+    const transcript = aiTranscriptText();
+    if (transcript.length > AI_MAX_CHARS) {
+      setAiStatus('danger', `文字起こしが長すぎるため（${transcript.length.toLocaleString()}文字）、AIには送っていません。前半と後半に分けて、それぞれ解析してください。規則ベースの解析結果は反映済みです。`);
+      return;
+    }
+    const model = $('aiModel').value;
+    const sig = [$('product').value, model, transcript].join('\u0000');
+    if (sig === aiLastKey) {
+      setAiStatus('info', 'この内容は、すでにAIで読み取り済みです（同じ内容は再送しません）。内容を変えるか、話者の役割を変えると、もう一度読み取ります。');
+      return;
+    }
+    aiBusy = true;
+    $('btnAnalyze').disabled = true;
+    setAiStatus('info', 'AIが会話の流れを読み取っています…（数十秒かかることがあります）');
+    try {
+      const specs = aiFieldSpecs();
+      const { res, json } = await callAnthropic({ key, model, user: buildAiUserMessage(transcript), schema: buildAiSchema(specs) });
+      if (!res.ok) { setAiStatus('danger', aiErrorText(res, json) + '\n規則ベースの解析結果は、そのまま残しています。'); return; }
+      if (json.stop_reason === 'refusal') {
+        setAiStatus('danger', 'AIがこの内容の読み取りを断りました。規則ベースの解析結果は、そのまま残しています。');
+        return;
+      }
+      const text = (json.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+      let obj;
+      try {
+        obj = JSON.parse(text);
+      } catch {
+        setAiStatus('danger', json.stop_reason === 'max_tokens'
+          ? 'AIの出力が長すぎて途中で切れました。文字起こしを分けて、もう一度お試しください。規則ベースの解析結果は、そのまま残しています。'
+          : 'AIの応答を読み取れませんでした。もう一度お試しください。規則ベースの解析結果は、そのまま残しています。');
+        return;
+      }
+      const n = applyAiResult(obj, specs);
+      aiLastKey = sig;
+      reviewed = true;
+      refreshAll();
+      const u = json.usage || {};
+      const confirms = String(obj.confirm_points || '').split('\n').map(x => x.trim()).filter(Boolean);
+      const lines = [`AIが ${n} 項目を反映しました。内容を必ず目視で確認してください。`];
+      if (u.input_tokens != null) lines.push(`使用したトークン: 入力 ${Number(u.input_tokens).toLocaleString()} ／ 出力 ${Number(u.output_tokens || 0).toLocaleString()}（モデル: ${json.model || model}）`);
+      if (confirms.length) lines.push('AIからの確認事項:', ...confirms.map(c => '・' + c));
+      setAiStatus('ok', lines.join('\n'));
+      toast(`AIが${n}項目を反映しました。内容を確認してください`);
+    } catch (err) {
+      setAiStatus('danger',
+        'AIと通信できませんでした。\n' +
+        '・インターネット接続とAPIキーを確認してください。\n' +
+        '・社内のネットワーク設定で api.anthropic.com への接続が制限されている場合があります。\n' +
+        '規則ベースの解析結果は、そのまま残しています。\n詳細: ' + (err && err.message ? err.message : err));
+    } finally {
+      aiBusy = false;
+      $('btnAnalyze').disabled = false;
+    }
+  }
+
+  const AI_LS = { aiEnabled: 'aiEnabled', aiKey: 'aiKey', aiModel: 'aiModel' };
+  function initAiSettings() {
+    const sel = $('aiModel');
+    for (const [v, t] of AI_MODELS) {
+      const op = document.createElement('option');
+      op.value = v;
+      op.textContent = t;
+      sel.appendChild(op);
+    }
+    const savedModel = lsGet(AI_LS.aiModel);
+    sel.value = AI_MODELS.some(m => m[0] === savedModel) ? savedModel : AI_MODELS[0][0];
+    const savedKey = lsGet(AI_LS.aiKey);
+    if (savedKey) { $('aiKey').value = savedKey; $('aiRemember').checked = true; }
+    $('aiEnabled').checked = lsGet(AI_LS.aiEnabled) === '1';
+    const saveKey = () => { if ($('aiRemember').checked) lsSet(AI_LS.aiKey, $('aiKey').value.trim()); else lsDel(AI_LS.aiKey); };
+    $('aiKey').addEventListener('input', saveKey);
+    $('aiRemember').addEventListener('change', saveKey);
+    $('aiModel').addEventListener('change', () => lsSet(AI_LS.aiModel, $('aiModel').value));
+    $('aiEnabled').addEventListener('change', () => {
+      lsSet(AI_LS.aiEnabled, aiActive() ? '1' : '0');
+      updateAiLabels();
+      if (aiActive() && !$('aiKey').value.trim()) $('aiSettings').open = true;
+    });
+    $('btnClearAiKey').addEventListener('click', () => {
+      lsDel(AI_LS.aiKey); $('aiKey').value = ''; $('aiRemember').checked = false;
+      toast('保存済みのAPIキーを削除しました');
+    });
+    updateAiLabels();
+  }
+
   /* ---------- 入力ハンドラ ---------- */
   // 入力欄のテキストから話者つきの発言を作る（整形済みで未変更なら前回の話者情報を再利用）
   function loadUtterances() {
@@ -1483,6 +1839,7 @@
     reviewed = true;
     refreshAll();
     toast(n ? `${n}項目を自動抽出しました。内容を確認してください` : '抽出できた項目がありません。手動で入力してください', n > 0);
+    if (aiActive()) runAiAnalyze();   // 規則ベースの結果を先に反映し、続けてAIで読み取る
   }
 
   async function loadFile(file) {
@@ -1685,6 +2042,7 @@
     renderAll();
     setupDnD();
     initHubSpotSettings();
+    initAiSettings();
     refreshAll();
 
     $('product').addEventListener('change', () => { renderAll(); applyStartUrls(); refreshAll(); });
