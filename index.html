@@ -2310,10 +2310,26 @@
     });
     $('btnHubSpot').addEventListener('click', sendToHubSpot);
     $('btnClipboard').addEventListener('click', importFromClipboard);
+    // 案件を選び直す。claude.aiのArtifactでは confirm() が使えないため、確認はボタンの2度押しで行う
+    let restartTimer = null;
+    const restartLabel = $('btnRestart').textContent;
+    const disarmRestart = () => {
+      clearTimeout(restartTimer); restartTimer = null;
+      $('btnRestart').textContent = restartLabel;
+      $('btnRestart').style.color = '';
+    };
     $('btnRestart').addEventListener('click', () => {
       const edited = $('transcript').value.trim() || Object.keys(values).some(k => values[k] && !defaultIds.has(k));
-      if (edited && !confirm('入力した内容は消えます。案件の選択からやり直しますか？')) return;
-      location.assign(location.pathname);
+      if (edited && !restartTimer) {
+        $('btnRestart').textContent = '入力内容が消えます。もう一度押すと選び直し';
+        $('btnRestart').style.color = 'var(--danger)';
+        restartTimer = setTimeout(disarmRestart, 6000);
+        return;
+      }
+      disarmRestart();
+      try {
+        if (location.search) location.assign(location.pathname); else location.reload();   // 商材の指定(?product=)があれば外して開き直す
+      } catch { location.reload(); }
     });
     $('transcript').addEventListener('paste', () => setTimeout(runAnalyze, 0));   // 貼り付けたらそのまま解析
     setupStartScreen();
