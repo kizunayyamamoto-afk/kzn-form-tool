@@ -264,6 +264,7 @@
             <input id="fileInput" type="file" accept=".vtt,.txt,text/plain,text/vtt" class="hidden">
           </label>
           <button id="btnClipboard" type="button" class="btn btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-clip"/></svg>クリップボードから取り込む</button>
+          <button id="btnManualAi" type="button" class="btn btn-sm" title="APIキー不要。文字起こしと項目の指示をコピーして、お使いのClaudeのチャットに貼り付けます"><svg class="icon" aria-hidden="true"><use href="#i-clip"/></svg>Claudeに読み取らせる(キー不要)</button>
           <button id="btnClean" type="button" class="btn btn-ghost btn-sm">タイムスタンプ・話者名を除去</button>
           <span id="cleanStat" class="hint"></span>
         </div>
@@ -289,6 +290,20 @@
       </summary>
       <div class="card-body">
         <div class="form-stack">
+          <div id="manualAi" class="alert alert-info" style="margin:0">
+            <b>APIキーなしで使う(コピー&貼り付け)</b>
+            <ol style="margin:6px 0 0 18px;padding:0">
+              <li>「指示をコピー」を押す(文字起こしと項目の指示がコピーされます)。</li>
+              <li>お使いのClaudeのチャット(claude.ai など)に貼り付けて送る。</li>
+              <li>返ってきたJSONをコピーして、下の欄に貼り、「発注書に反映」を押す。</li>
+            </ol>
+            <p class="hint" style="margin:6px 0 0">このツールからは何も送信されません。コピーした文字起こしを貼るのは、あなたが使うClaudeのチャットです。社内の取り扱いルールに沿って使ってください。認証情報の欄は指示に含めず、貼り付けた結果にあっても反映しません。</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+              <button id="btnCopyPrompt" type="button" class="btn btn-sm btn-primary">指示をコピー</button>
+              <button id="btnImportJson" type="button" class="btn btn-sm">発注書に反映</button>
+            </div>
+            <textarea id="manualJson" rows="4" class="control" style="margin-top:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px" placeholder="Claudeが返したJSONをここに貼り付け"></textarea>
+          </div>
           <p class="hint">規則ベースの解析に加えて、AI（Claude）が<b>会話の流れ</b>を読み、お客様の事業・強み・困りごと・やりたいこと・要望などを発注書に入れます。営業の提案にお客様がうなずいた内容も踏まえます。<b>オンにすると、文字起こしと項目の定義が Anthropic の API（api.anthropic.com）へ送信されます。</b>お客様の情報が含まれるため、社内の取り扱いルールに沿って使ってください。初期値はオフです。</p>
           <label class="check-row">
             <input id="aiEnabled" type="checkbox">
@@ -1720,6 +1735,51 @@
     }
   }
 
+  // ---- APIキーなし: 指示をコピー → 自分のClaudeに貼る → 返ったJSONを貼り戻す ----
+  function manualPrompt() {
+    if (!$('transcript').value.trim()) { toast('文字起こしが空です', false); return null; }
+    if (!runClean()) return null;
+    const specs = aiFieldSpecs();
+    return { specs, text: buildSamplePrompt(buildAiUserMessage(aiTranscriptText()), specs) };
+  }
+
+  async function copyManualPrompt() {
+    const m = manualPrompt();
+    if (!m) return;
+    const ok = await copyText(m.text);
+    toast(ok ? '指示をコピーしました。Claudeのチャットに貼り付けて送ってください' : 'コピーできませんでした。ブラウザの設定を確認してください', ok);
+    if (ok) { $('aiSettings').open = true; $('manualJson').focus(); }
+  }
+
+  // Claudeの返答から、JSONオブジェクトを取り出す（コードブロックや前後の説明文があってもよい）
+  function parseJsonLoose(text) {
+    const t = String(text || '').trim();
+    const cands = [t];
+    const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fence) cands.push(fence[1]);
+    const a = t.indexOf('{'), b = t.lastIndexOf('}');
+    if (a >= 0 && b > a) cands.push(t.slice(a, b + 1));
+    for (const c of cands) {
+      try { const v = JSON.parse(c); if (v && typeof v === 'object' && !Array.isArray(v)) return v; } catch { /* 次の候補へ */ }
+    }
+    return null;
+  }
+
+  function importManualJson() {
+    const obj = parseJsonLoose($('manualJson').value);
+    if (!obj) { setAiStatus('danger', '貼り付けた内容から、JSONを読み取れませんでした。Claudeの返答の { から } までを、そのまま貼り付けてください。'); return; }
+    if (!utterances.length) { loadUtterances(); guessRoles(utterances); }
+    const specs = aiFieldSpecs();
+    const n = applyAiResult(obj, specs);
+    reviewed = true;
+    refreshAll();
+    const confirms = String(obj.confirm_points || '').split('\n').map(x => x.trim()).filter(Boolean);
+    const lines = [n ? `貼り付けた結果から ${n} 項目を反映しました。内容を必ず目視で確認してください。` : '反映できる項目がありませんでした。商材の選択と、Claudeに貼った指示が今の商材のものか確認してください。'];
+    if (confirms.length) lines.push('Claudeからの確認事項:', ...confirms.map(c => '・' + c));
+    setAiStatus(n ? 'ok' : 'danger', lines.join('\n'));
+    toast(n ? `${n}項目を反映しました。内容を確認してください` : '反映できる項目がありません', n > 0);
+  }
+
   const AI_HINTS = {
     400: 'リクエストが受け付けられませんでした。',
     401: 'APIキーが無効です。キーを確認してください。',
@@ -1863,6 +1923,9 @@
       lsDel(AI_LS.aiKey); $('aiKey').value = ''; $('aiRemember').checked = false;
       toast('保存済みのAPIキーを削除しました');
     });
+    $('btnCopyPrompt').addEventListener('click', copyManualPrompt);
+    $('btnManualAi').addEventListener('click', copyManualPrompt);
+    $('btnImportJson').addEventListener('click', importManualJson);
     $('aiMode').addEventListener('change', () => { lsSet('aiMode', $('aiMode').value); updateAiLabels(); });
     updateAiLabels();
     detectClaudeSample();
