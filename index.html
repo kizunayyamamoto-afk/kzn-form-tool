@@ -227,6 +227,19 @@
       <details id="startGbpBox" style="margin-top:10px">
         <summary style="cursor:pointer;font-weight:600">Googleマップの情報を読み取る<span class="pill pill-muted" style="margin-left:6px">任意</span></summary>
         <p class="hint" style="margin:8px 0">GoogleマップのURLを上に貼ると、URLに含まれる店名を読み取ります。住所・電話・営業時間は、Googleマップのお店の画面から、店名・住所・電話番号・営業時間の部分をコピーして、下に貼ってください（ツールがGoogleへ接続することはありません）。</p>
+        <div class="alert alert-info" style="margin:0 0 10px">
+          <b>住所・電話・営業時間をGoogleから取得する（任意・初期値は何も送信しません）</b>
+          <p class="hint" style="margin:6px 0">Google Places APIのキーを入れて、下の「取得」を押したときだけ、店名（と、URLにあれば地図上の位置）を places.googleapis.com へ送って、住所・電話・営業時間を受け取ります。文字起こしや顧客情報は送りません。キーは、Google Cloudで「Places API (New)」を有効にして発行し、HTTPリファラで制限してください（取得1回ごとにGoogle側の利用料がかかります）。</p>
+          <label for="placesName" class="label">店名（URLから読み取れないときは入力）</label>
+          <input id="placesName" type="text" class="control" style="margin-top:4px" placeholder="例）○○洋菓子店 京都">
+          <label for="placesKey" class="label" style="margin-top:8px;display:block">Google Places APIキー</label>
+          <input id="placesKey" type="password" autocomplete="off" class="control" style="margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px" placeholder="AIza...">
+          <label class="check-row" style="margin-top:6px"><input id="placesRemember" type="checkbox">このブラウザのLocalStorageに保存する（共有PCでは非推奨）</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+            <button id="btnPlaces" type="button" class="btn btn-sm btn-primary">Googleで住所・電話を取得</button>
+            <span id="placesStatus" class="hint"></span>
+          </div>
+        </div>
         <textarea id="startGbp" rows="5" placeholder="例）&#10;○○洋菓子店&#10;住所: 京都府京都市○○区△△町1-2-3&#10;電話番号: 075-000-0000&#10;月曜日 10:00〜19:00 …" class="control"></textarea>
         <div id="startGbpPreview" class="hint" style="margin-top:6px"></div>
       </details>
@@ -2227,11 +2240,84 @@
     return out;
   }
 
-  // 起動画面の情報を、いまの内容に合わせてまとめる（URLの店名 < 貼り付けた店名）
+  // ---- Google Places API（任意・ボタンを押したときだけ通信）----
+  const PLACES_ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
+  const PLACES_FIELDS = 'places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.regularOpeningHours.weekdayDescriptions';
+  let placesFetched = null;   // { name, zip, addr, tel, hours }
+
+  function coordsFromUrl(u) {
+    const m = u.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    return m ? { latitude: Number(m[1]), longitude: Number(m[2]) } : null;
+  }
+
+  // Places APIの1件を、欄に合う形にする（住所は「日本、〒000-0000 …」から郵便番号を分ける）
+  function placeToInfo(pl) {
+    const out = { name: '', zip: '', addr: '', tel: '', hours: '' };
+    out.name = (pl.displayName && pl.displayName.text) || '';
+    let addr = String(pl.formattedAddress || '').replace(/^日本[、,]\s*/, '');
+    const z = addr.match(/〒?\s*(\d{3})[-ー−‐－]?(\d{4})/);
+    if (z) { out.zip = '〒' + z[1] + '-' + z[2]; addr = addr.replace(/〒?\s*\d{3}[-ー−‐－]?\d{4}\s*/, ''); }
+    out.addr = addr.trim();
+    out.tel = String(pl.nationalPhoneNumber || '').trim();
+    const wd = pl.regularOpeningHours && pl.regularOpeningHours.weekdayDescriptions;
+    if (Array.isArray(wd)) out.hours = wd.join(' / ');
+    return out;
+  }
+
+  const PLACES_HINTS = {
+    400: 'リクエストが受け付けられませんでした。店名を確認してください。',
+    401: 'APIキーが無効です。',
+    403: 'このAPIキーでは使えません。Google Cloudで「Places API (New)」が有効か、キーの制限（HTTPリファラ）を確認してください。',
+    429: 'リクエストが多すぎます。少し待ってから、もう一度お試しください。',
+  };
+
+  async function lookupPlaces() {
+    const key = $('placesKey').value.trim();
+    const gbpUrl = startUrls.find(r => r.cat === 'gbp');
+    const query = $('placesName').value.trim() || gbpInfo().name;
+    const st = $('placesStatus');
+    if (!key) { st.textContent = 'Google Places APIキーを入力してください。'; return; }
+    if (!query) { st.textContent = '店名を入力するか、店名が入ったGoogleマップのURLを貼ってください。'; return; }
+    const body = { textQuery: query, languageCode: 'ja', regionCode: 'JP', pageSize: 1 };
+    const c = gbpUrl ? coordsFromUrl(gbpUrl.url) : null;
+    if (c) body.locationBias = { circle: { center: c, radius: 500.0 } };
+    $('btnPlaces').disabled = true;
+    st.textContent = 'Googleに問い合わせています…';
+    try {
+      const res = await fetch(PLACES_ENDPOINT, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': PLACES_FIELDS },
+        body: JSON.stringify(body),
+      });
+      let json = null;
+      try { json = await res.json(); } catch { /* JSONでない応答 */ }
+      if (!res.ok) {
+        const detail = json && json.error && json.error.message ? ` 詳細: ${json.error.message}` : '';
+        st.textContent = `取得に失敗しました（HTTP ${res.status}）。${PLACES_HINTS[res.status] || ''}${detail}`;
+        return;
+      }
+      const pl = json && json.places && json.places[0];
+      if (!pl) { st.textContent = '該当するお店が見つかりませんでした。店名を直して、もう一度お試しください。'; return; }
+      placesFetched = placeToInfo(pl);
+      st.textContent = '取得しました。最初の候補を使います。違うお店なら、店名を直して再取得してください。';
+      renderGbpPreview();
+    } catch (err) {
+      st.textContent = 'Googleと通信できませんでした。インターネット接続を確認してください（claude.ai上のArtifactなど、外部通信が制限される画面では使えません）。貼り付けでの入力は使えます。';
+    } finally {
+      $('btnPlaces').disabled = false;
+    }
+  }
+
+  // 起動画面の情報を、いまの内容に合わせてまとめる（貼り付けた情報 > Googleから取得 > URLの店名）
   function gbpInfo() {
     const text = parseGbpText(startGbpText);
+    const f = placesFetched || {};
     const urlName = startUrls.filter(r => r.cat === 'gbp').map(r => gbpNameFromUrl(r.url)).find(Boolean) || '';
-    return { ...text, name: text.name || urlName };
+    return {
+      name: text.name || f.name || urlName,
+      zip: text.zip || f.zip || '', addr: text.addr || f.addr || '',
+      tel: text.tel || f.tel || '', hours: text.hours || f.hours || '',
+    };
   }
 
   function renderGbpPreview() {
@@ -2328,6 +2414,13 @@
     let q = '';
     try { q = (new URLSearchParams(location.search).get('product') || '').toLowerCase(); } catch { q = ''; }
     $('startUrls').addEventListener('input', () => { parseStartUrls(); renderGbpPreview(); });
+    // Google Places APIキーの保存（初期値は保存しない）
+    const savedPk = lsGet('placesKey');
+    if (savedPk) { $('placesKey').value = savedPk; $('placesRemember').checked = true; }
+    const savePk = () => { if ($('placesRemember').checked) lsSet('placesKey', $('placesKey').value.trim()); else lsDel('placesKey'); };
+    $('placesKey').addEventListener('input', savePk);
+    $('placesRemember').addEventListener('change', savePk);
+    $('btnPlaces').addEventListener('click', lookupPlaces);
     $('startGbp').addEventListener('input', () => { startGbpText = $('startGbp').value; renderGbpPreview(); });
     document.querySelectorAll('#startScreen [data-product]').forEach(b => {
       b.addEventListener('click', () => chooseProduct(b.dataset.product));
