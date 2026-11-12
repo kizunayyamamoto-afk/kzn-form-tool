@@ -228,6 +228,21 @@
         <summary style="cursor:pointer;font-weight:600">Googleマップの情報を読み取る<span class="pill pill-muted" style="margin-left:6px">任意</span></summary>
         <p class="hint" style="margin:8px 0">GoogleマップのURLを上に貼ると、URLに含まれる店名を読み取ります。住所・電話・営業時間は、Googleマップのお店の画面から、店名・住所・電話番号・営業時間の部分をコピーして、下に貼ってください（ツールがGoogleへ接続することはありません）。</p>
         <div class="alert alert-info" style="margin:0 0 10px">
+          <b>キーなしで調べる: Claudeに調べてもらう</b>
+          <p class="hint" style="margin:6px 0">店名とGoogleマップのURLを、お使いのClaude（Web検索が使えるもの）に調べさせて、住所・電話・営業時間を取り込みます。APIキーは不要で、このツールからは何も送信しません。</p>
+          <ol style="margin:0 0 0 18px;padding:0">
+            <li>下の「店名」（またはGoogleマップのURL）を入れて、「調べる指示をコピー」を押す。</li>
+            <li>お使いのClaudeのチャットに貼り付けて送る。</li>
+            <li>返ってきたJSONを、下の欄に貼って「取り込む」を押す。</li>
+          </ol>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <button id="btnResearchCopy" type="button" class="btn btn-sm btn-primary">調べる指示をコピー</button>
+            <button id="btnResearchImport" type="button" class="btn btn-sm">取り込む</button>
+          </div>
+          <textarea id="researchJson" rows="3" class="control" style="margin-top:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px" placeholder="Claudeが返したJSONをここに貼り付け"></textarea>
+          <div id="researchStatus" class="hint" style="margin-top:4px"></div>
+        </div>
+        <div class="alert alert-info" style="margin:0 0 10px">
           <b>住所・電話・営業時間をGoogleから取得する（任意・初期値は何も送信しません）</b>
           <p class="hint" style="margin:6px 0">Google Places APIのキーを入れて、下の「取得」を押したときだけ、店名（と、URLにあれば地図上の位置）を places.googleapis.com へ送って、住所・電話・営業時間を受け取ります。文字起こしや顧客情報は送りません。キーは、Google Cloudで「Places API (New)」を有効にして発行し、HTTPリファラで制限してください（取得1回ごとにGoogle側の利用料がかかります）。</p>
           <label for="placesName" class="label">店名（URLから読み取れないときは入力）</label>
@@ -2308,7 +2323,58 @@
     }
   }
 
-  // 起動画面の情報を、いまの内容に合わせてまとめる（貼り付けた情報 > Googleから取得 > URLの店名）
+  // ---- キーなし: Claudeに調べてもらう（指示をコピー → 自分のClaudeに貼る → 返ったJSONを貼り戻す）----
+  function researchPrompt() {
+    const gbpUrl = startUrls.find(r => r.cat === 'gbp');
+    const name = $('placesName').value.trim() || gbpInfo().name;
+    if (!name && !gbpUrl) return '';
+    return [
+      '次のお店について、Googleマップや、お店の公式サイトなど信頼できる情報源をWeb検索で調べて、住所・電話番号・営業時間を教えてください。',
+      '',
+      name ? `店名: ${name}` : '',
+      gbpUrl ? `GoogleマップのURL: ${gbpUrl.url}` : '',
+      '',
+      '# 守ること',
+      '- 確認できた事実だけを書く。確認できない項目や、同名の別のお店かもしれない場合は、推測せず空文字にする。',
+      '- zip は「〒000-0000」の形。addr は都道府県から（郵便番号と「日本、」は含めない）。tel は「075-000-0000」の形。',
+      '- hours は、曜日ごとの営業時間（定休日を含む）を「 / 」でつなぐ。例: 月曜日: 10:00〜19:00 / 火曜日: 定休日',
+      '- source には、参照したページのURLを書く。',
+      '',
+      '# 出力形式',
+      '次のキーをすべて含む、JSONオブジェクトだけを出力する（説明文は付けない）。',
+      '{"name": "", "zip": "", "addr": "", "tel": "", "hours": "", "source": ""}',
+    ].filter(l => l !== undefined).join('\n').replace(/\n{3,}/g, '\n\n');
+  }
+
+  async function copyResearchPrompt() {
+    const t = researchPrompt();
+    const st = $('researchStatus');
+    if (!t) { st.textContent = '店名を入力するか、GoogleマップのURLを貼ってください。'; return; }
+    const ok = await copyText(t);
+    st.textContent = ok ? '指示をコピーしました。お使いのClaudeのチャットに貼り付けて送り、返ってきたJSONを下に貼ってください。' : 'コピーできませんでした。ブラウザの設定を確認してください。';
+    if (ok) $('researchJson').focus();
+  }
+
+  function importResearch() {
+    const st = $('researchStatus');
+    const obj = parseJsonLoose($('researchJson').value);
+    if (!obj) { st.textContent = '貼り付けた内容から、JSONを読み取れませんでした。Claudeの返答の { から } までを、そのまま貼り付けてください。'; return; }
+    const str = (k) => (typeof obj[k] === 'string' ? obj[k].trim() : '');
+    let addr = str('addr').replace(/^日本[、,]\s*/, '');
+    let zip = str('zip');
+    const z = (zip + ' ' + addr).match(/〒?\s*(\d{3})[-ー−‐－]?(\d{4})/);
+    zip = z ? '〒' + z[1] + '-' + z[2] : '';
+    addr = addr.replace(/〒?\s*\d{3}[-ー−‐－]?\d{4}\s*/, '').trim();
+    const tel = (str('tel').match(/0\d{1,4}[-ー−‐－]\d{1,4}[-ー−‐－]\d{3,4}/) || [''])[0].replace(/[ー−‐－]/g, '-');
+    const info = { name: str('name'), zip, addr, tel, hours: str('hours') };
+    if (!info.name && !info.addr && !info.tel && !info.hours) { st.textContent = '取り込める情報がありませんでした（Claudeが確認できなかった可能性があります）。店名を確認して、もう一度調べてください。'; return; }
+    placesFetched = info;
+    const src = str('source');
+    st.textContent = 'Claudeの調査結果を取り込みました。内容は必ず目視で確認してください（同名の別のお店・古い情報の可能性があります）。' + (src ? ` 参照元: ${src}` : '');
+    renderGbpPreview();
+  }
+
+  // 起動画面の情報を、いまの内容に合わせてまとめる（貼り付けた情報 > 取得・調査の結果 > URLの店名）
   function gbpInfo() {
     const text = parseGbpText(startGbpText);
     const f = placesFetched || {};
@@ -2421,6 +2487,8 @@
     $('placesKey').addEventListener('input', savePk);
     $('placesRemember').addEventListener('change', savePk);
     $('btnPlaces').addEventListener('click', lookupPlaces);
+    $('btnResearchCopy').addEventListener('click', copyResearchPrompt);
+    $('btnResearchImport').addEventListener('click', importResearch);
     $('startGbp').addEventListener('input', () => { startGbpText = $('startGbp').value; renderGbpPreview(); });
     document.querySelectorAll('#startScreen [data-product]').forEach(b => {
       b.addEventListener('click', () => chooseProduct(b.dataset.product));
