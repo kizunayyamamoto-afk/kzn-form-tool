@@ -294,6 +294,15 @@
             <input id="aiEnabled" type="checkbox">
             解析のときにAIも使う
           </label>
+          <label id="aiModeRow" class="hidden">
+            <span class="label">接続方法</span>
+            <select id="aiMode" class="control" style="margin-top:5px">
+              <option value="claude">Claude（このページに内蔵・APIキー不要）</option>
+              <option value="api">Anthropic APIキーを使う</option>
+            </select>
+            <span class="hint" style="display:block;margin-top:6px">claude.ai で開いているときだけ選べます。解析は、ページを開いている人のClaudeの利用枠で行われ、最初の1回だけ許可の確認が出ます。</span>
+          </label>
+          <div id="aiApiBox" class="form-stack">
           <label>
             <span class="label">Anthropic APIキー</span>
             <input id="aiKey" type="password" autocomplete="off" placeholder="sk-ant-..." class="control" style="margin-top:5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px">
@@ -308,6 +317,7 @@
           </label>
           <p class="hint">料金は、モデルと文字起こしの長さによって、1回の解析ごとにAPI利用料がかかります（解析後に、使ったトークン数を表示します）。APIキーは、このブラウザにだけ保存され、Anthropic以外へは送信しません。AIが失敗しても、規則ベースの解析結果はそのまま残ります。</p>
           <div><button id="btnClearAiKey" type="button" class="btn btn-sm" style="color:var(--danger)">保存済みのキーを削除</button></div>
+          </div>
         </div>
       </div>
     </details>
@@ -1553,6 +1563,10 @@
   ].join('\n');
 
   const aiActive = () => $('aiEnabled').checked;
+  // claude.ai 上で開いたときだけ使える「Claude内蔵」(sample)。APIキー不要で、開いている人のClaude利用枠で動く
+  let claudeSample = null;
+  const aiViaClaude = () => !!claudeSample && $('aiMode').value === 'claude';
+  const AI_SAMPLE_MAX_BYTES = 240000;   // 入力の上限(256KiB)に余裕を持たせる
 
   function setAiStatus(kind, msg) {
     const box = $('aiStatus');
@@ -1564,7 +1578,8 @@
 
   function updateAiLabels() {
     const on = aiActive();
-    $('analyzeLabel').textContent = on ? 'AIで読み取って発注書に反映' : '自動解析して発注書に反映';
+    $('analyzeLabel').textContent = on ? (aiViaClaude() ? 'Claudeで読み取って発注書に反映' : 'AIで読み取って発注書に反映') : '自動解析して発注書に反映';
+    $('aiApiBox').classList.toggle('hidden', aiViaClaude());
     $('aiPill').textContent = on ? 'オン' : 'オフ';
     $('aiPill').className = 'pill ' + (on ? 'pill-brand' : 'pill-muted');
   }
@@ -1649,6 +1664,62 @@
     return r;
   }
 
+  // Claude内蔵用: システムプロンプト・項目の定義・出力形式を1つの文章にまとめる（sampleは指示を入力に含める）
+  function buildSamplePrompt(user, specs) {
+    const fields = specs.map(sp => `- ${sp.id}: ${sp.desc}${sp.opts ? `（選択肢: ${sp.opts.join(' / ')} / 空文字）` : ''}`).join('\n');
+    return [
+      AI_SYSTEM_PROMPT, '',
+      '# 項目の定義（キー: 書き方）', fields,
+      '- confirm_points: 音声認識の誤りが疑われる点や、営業があとで確認すべき点（1行に1件。無ければ空文字）', '',
+      '# 出力形式',
+      '上のキーをすべて含む、1つのJSONオブジェクトだけを出力する（説明文やコードブロックは付けない）。値はすべて文字列。言及が無い項目は空文字。', '',
+      user,
+    ].join('\n');
+  }
+  const SAMPLE_ERRORS = {
+    not_granted: 'Claudeの利用が許可されていません。ページを開き直して、許可の確認で「許可」を選んでください。',
+    sampling_disabled: 'このアカウント・組織では、ページからのClaude利用が使えません。',
+    rate_limited: 'リクエストが多すぎる、または利用枠の上限に達しました。少し待ってから、もう一度お試しください。',
+    session_expired: 'ログインの有効期限が切れました。claude.ai を開き直してください。',
+    prompt_too_large: '文字起こしが長すぎます。前半と後半に分けて解析してください。',
+    refused: 'Claudeがこの内容の読み取りを断りました。',
+    invalid_json: 'Claudeの応答を読み取れませんでした。もう一度お試しください。',
+    empty_completion: 'Claudeから回答が返りませんでした。もう一度お試しください。',
+    upstream_error: 'Claude側で一時的なエラーが起きました。少し待ってから、もう一度お試しください。',
+  };
+
+  async function runClaudeAnalyze(transcript, sig) {
+    const specs = aiFieldSpecs();
+    const prompt = buildSamplePrompt(buildAiUserMessage(transcript), specs);
+    if (new TextEncoder().encode(prompt).length > AI_SAMPLE_MAX_BYTES) {
+      setAiStatus('danger', `文字起こしが長すぎるため（${transcript.length.toLocaleString()}文字）、Claudeには送っていません。前半と後半に分けて、それぞれ解析してください。規則ベースの解析結果は反映済みです。`);
+      return;
+    }
+    aiBusy = true;
+    $('btnAnalyze').disabled = true;
+    setAiStatus('info', 'Claudeが会話の流れを読み取っています…（初回は許可の確認が出ます。数十秒かかることがあります）');
+    try {
+      const obj = await claudeSample.json(prompt, { modelTier: 'complex' });
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw { code: 'invalid_json' };
+      const n = applyAiResult(obj, specs);
+      aiLastKey = sig;
+      reviewed = true;
+      refreshAll();
+      const confirms = String(obj.confirm_points || '').split('\n').map(x => x.trim()).filter(Boolean);
+      const lines = [`Claudeが ${n} 項目を反映しました。内容を必ず目視で確認してください。`];
+      if (confirms.length) lines.push('Claudeからの確認事項:', ...confirms.map(c => '・' + c));
+      setAiStatus('ok', lines.join('\n'));
+      toast(`Claudeが${n}項目を反映しました。内容を確認してください`);
+    } catch (e) {
+      if (e && e.code === 'cancelled') { setAiStatus('', ''); return; }
+      const msg = (e && SAMPLE_ERRORS[e.code]) || 'Claudeの呼び出しに失敗しました。';
+      setAiStatus('danger', `${msg}\n規則ベースの解析結果は、そのまま残しています。`);
+    } finally {
+      aiBusy = false;
+      $('btnAnalyze').disabled = false;
+    }
+  }
+
   const AI_HINTS = {
     400: 'リクエストが受け付けられませんでした。',
     401: 'APIキーが無効です。キーを確認してください。',
@@ -1696,6 +1767,13 @@
 
   async function runAiAnalyze() {
     if (aiBusy) return;
+    if (aiViaClaude()) {
+      if (!utterances.length) return;
+      const t = aiTranscriptText();
+      const s = ['claude', $('product').value, t].join('\u0000');
+      if (s === aiLastKey) { setAiStatus('info', 'この内容は、すでにClaudeで読み取り済みです（同じ内容は再送しません）。内容を変えると、もう一度読み取ります。'); return; }
+      return runClaudeAnalyze(t, s);
+    }
     const key = $('aiKey').value.trim();
     if (!key) {
       $('aiSettings').open = true;
@@ -1779,13 +1857,31 @@
     $('aiEnabled').addEventListener('change', () => {
       lsSet(AI_LS.aiEnabled, aiActive() ? '1' : '0');
       updateAiLabels();
-      if (aiActive() && !$('aiKey').value.trim()) $('aiSettings').open = true;
+      if (aiActive() && !aiViaClaude() && !$('aiKey').value.trim()) $('aiSettings').open = true;
     });
     $('btnClearAiKey').addEventListener('click', () => {
       lsDel(AI_LS.aiKey); $('aiKey').value = ''; $('aiRemember').checked = false;
       toast('保存済みのAPIキーを削除しました');
     });
+    $('aiMode').addEventListener('change', () => { lsSet('aiMode', $('aiMode').value); updateAiLabels(); });
     updateAiLabels();
+    detectClaudeSample();
+  }
+
+  // claude.ai 上のページなら、Claude内蔵（APIキー不要）を使えるようにする。それ以外（GitHub Pages等）では何も変わらない
+  async function detectClaudeSample() {
+    try {
+      if (!window.claude || typeof window.claude.use !== 'function') return;
+      const smp = await window.claude.use('sample');
+      if (!smp || typeof smp.json !== 'function') return;
+      claudeSample = smp;
+      $('aiModeRow').classList.remove('hidden');
+      const savedMode = lsGet('aiMode');
+      $('aiMode').value = savedMode === 'api' ? 'api' : 'claude';
+      // 保存した設定が無いときは、Claude内蔵を初期値でオンにする（実行時に許可の確認が出る）
+      if (lsGet(AI_LS.aiEnabled) === null || lsGet(AI_LS.aiEnabled) === undefined || lsGet(AI_LS.aiEnabled) === '') $('aiEnabled').checked = true;
+      updateAiLabels();
+    } catch { /* 使えない環境では何もしない */ }
   }
 
   /* ---------- 入力ハンドラ ---------- */
