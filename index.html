@@ -302,6 +302,7 @@
               <button id="btnCopyPrompt" type="button" class="btn btn-sm btn-primary">指示をコピー</button>
               <button id="btnImportJson" type="button" class="btn btn-sm">発注書に反映</button>
             </div>
+            <div id="manualParts" class="hidden" style="margin-top:8px"></div>
             <textarea id="manualJson" rows="4" class="control" style="margin-top:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px" placeholder="Claudeが返したJSONをここに貼り付け"></textarea>
           </div>
           <p class="hint">規則ベースの解析に加えて、AI（Claude）が<b>会話の流れ</b>を読み、お客様の事業・強み・困りごと・やりたいこと・要望などを発注書に入れます。営業の提案にお客様がうなずいた内容も踏まえます。<b>オンにすると、文字起こしと項目の定義が Anthropic の API（api.anthropic.com）へ送信されます。</b>お客様の情報が含まれるため、社内の取り扱いルールに沿って使ってください。初期値はオフです。</p>
@@ -1629,20 +1630,21 @@
   }
 
   // 話者の役割つきの文字起こし
-  function aiTranscriptText() {
-    return utterances.map(u => {
+  function aiTranscriptText(list = utterances) {
+    return list.map(u => {
       const role = roleOf(u.speaker);
       const tag = role === 'sales' ? '営業' : role === 'customer' ? 'お客様' : '発言';
       return `[${tag}]${u.speaker ? ' ' + u.speaker : ''}: ${u.text}`;
     }).join('\n');
   }
 
-  function buildAiUserMessage(transcript) {
+  function buildAiUserMessage(transcript, part) {
     const product = isNest() ? 'nest' : isRaqmo() ? 'RAQMO（制作発注）' : 'その他の制作発注';
     const sales = $('sales').value.trim();
     const client = $('client').value.trim();
     const head = [`商材: ${product}`, sales ? `担当営業: ${sales}` : '', client ? `顧客名（入力済み）: ${client}` : ''].filter(Boolean).join('\n');
-    return `${head}\n\n# 文字起こし（[営業]=KIZUNA側、[お客様]=発注する顧客側）\n${transcript}`;
+    const partNote = part && part.n > 1 ? `\n※長いため全体を${part.n}分割しています。これは ${part.i}/${part.n} 番目です。この部分から分かることだけを記入し、言及が無い項目は空文字にしてください（ほかの部分は別に読み取ります）。\n` : '';
+    return `${head}${partNote}\n\n# 文字起こし（[営業]=KIZUNA側、[お客様]=発注する顧客側）\n${transcript}`;
   }
 
   async function callAnthropic({ key, model, user, schema }) {
@@ -1703,25 +1705,68 @@
     upstream_error: 'Claude側で一時的なエラーが起きました。少し待ってから、もう一度お試しください。',
   };
 
-  async function runClaudeAnalyze(transcript, sig) {
+  const byteLen = (t) => new TextEncoder().encode(t).length;
+  const MANUAL_MAX_BYTES = 120000;   // コピー&貼り付けで、チャットに貼りやすい長さの目安
+
+  // 長いときは、発言の区切りで2つに分ける（それでも収まらなければ、さらに半分に分ける）
+  function splitUtterances(list, fits, depth = 0) {
+    if (fits(list) || list.length < 2 || depth >= 4) return [list];
+    const total = list.reduce((a, u) => a + u.text.length, 0);
+    let acc = 0, at = 1;
+    for (let i = 0; i < list.length - 1; i++) { acc += list[i].text.length; at = i + 1; if (acc >= total / 2) break; }
+    return [...splitUtterances(list.slice(0, at), fits, depth + 1), ...splitUtterances(list.slice(at), fits, depth + 1)];
+  }
+
+  function makeParts(specs, maxBytes) {
+    const fits = (l) => byteLen(buildSamplePrompt(buildAiUserMessage(aiTranscriptText(l)), specs)) <= maxBytes;
+    const groups = splitUtterances(utterances, fits);
+    const n = groups.length;
+    return groups.map((g, k) => ({ i: k + 1, n, list: g, prompt: buildSamplePrompt(buildAiUserMessage(aiTranscriptText(g), { i: k + 1, n }), specs) }));
+  }
+
+  // 分けて読み取った結果を、1つにまとめる（選択式・顧客名は最初の値、文章は重複を除いて改行でつなぐ）
+  function mergeAiResults(results, specs) {
+    const out = {};
+    const optsOf = new Map(specs.map(sp => [sp.id, sp.opts]));
+    const keys = new Set(['confirm_points']);
+    results.forEach(r => Object.keys(r || {}).forEach(k => keys.add(k)));
+    for (const k of keys) {
+      const vals = [];
+      for (const r of results) {
+        const v = r && typeof r[k] === 'string' ? r[k].trim() : '';
+        if (v && !vals.includes(v)) vals.push(v);
+      }
+      out[k] = (k === 'client' || optsOf.get(k)) ? (vals[0] || '') : vals.join('\n');
+    }
+    return out;
+  }
+
+  const confirmLines = (obj) => String(obj.confirm_points || '').split('\n').map(x => x.trim()).filter(Boolean);
+
+  async function runClaudeAnalyze(sig) {
     const specs = aiFieldSpecs();
-    const prompt = buildSamplePrompt(buildAiUserMessage(transcript), specs);
-    if (new TextEncoder().encode(prompt).length > AI_SAMPLE_MAX_BYTES) {
-      setAiStatus('danger', `文字起こしが長すぎるため（${transcript.length.toLocaleString()}文字）、Claudeには送っていません。前半と後半に分けて、それぞれ解析してください。規則ベースの解析結果は反映済みです。`);
+    const parts = makeParts(specs, AI_SAMPLE_MAX_BYTES);
+    if (parts.some(pt => byteLen(pt.prompt) > AI_SAMPLE_MAX_BYTES)) {
+      setAiStatus('danger', '1つの発言が長すぎて、分けられませんでした。文字起こしを確認してください。規則ベースの解析結果は反映済みです。');
       return;
     }
     aiBusy = true;
     $('btnAnalyze').disabled = true;
-    setAiStatus('info', 'Claudeが会話の流れを読み取っています…（初回は許可の確認が出ます。数十秒かかることがあります）');
     try {
-      const obj = await claudeSample.json(prompt, { modelTier: 'complex' });
-      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw { code: 'invalid_json' };
-      const n = applyAiResult(obj, specs);
+      const results = [];
+      for (const pt of parts) {
+        setAiStatus('info', (pt.n > 1 ? `長いため${pt.n}つに分けて読み取ります（${pt.i}/${pt.n}）。` : '') + 'Claudeが会話の流れを読み取っています…（初回は許可の確認が出ます。数十秒かかることがあります）');
+        const obj = await claudeSample.json(pt.prompt, { modelTier: 'complex' });
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw { code: 'invalid_json' };
+        results.push(obj);
+      }
+      const merged = mergeAiResults(results, specs);
+      const n = applyAiResult(merged, specs);
       aiLastKey = sig;
       reviewed = true;
       refreshAll();
-      const confirms = String(obj.confirm_points || '').split('\n').map(x => x.trim()).filter(Boolean);
-      const lines = [`Claudeが ${n} 項目を反映しました。内容を必ず目視で確認してください。`];
+      const confirms = confirmLines(merged);
+      const lines = [`Claudeが ${n} 項目を反映しました。内容を必ず目視で確認してください。` + (parts.length > 1 ? `（${parts.length}つに分けて読み取りました）` : '')];
       if (confirms.length) lines.push('Claudeからの確認事項:', ...confirms.map(c => '・' + c));
       setAiStatus('ok', lines.join('\n'));
       toast(`Claudeが${n}項目を反映しました。内容を確認してください`);
@@ -1736,18 +1781,43 @@
   }
 
   // ---- APIキーなし: 指示をコピー → 自分のClaudeに貼る → 返ったJSONを貼り戻す ----
-  function manualPrompt() {
-    if (!$('transcript').value.trim()) { toast('文字起こしが空です', false); return null; }
-    if (!runClean()) return null;
-    const specs = aiFieldSpecs();
-    return { specs, text: buildSamplePrompt(buildAiUserMessage(aiTranscriptText()), specs) };
+  let manualParts = [];     // 分けた指示（長いとき）
+  let manualResults = [];   // 貼り戻した結果（分けたぶんをまとめて反映する）
+
+  function renderManualParts() {
+    const box = $('manualParts');
+    box.innerHTML = '';
+    if (manualParts.length < 2) { box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    const msg = document.createElement('div');
+    msg.className = 'hint';
+    msg.textContent = `長いため、${manualParts.length}つに分けました。1つずつ、Claudeに貼って送り、返ってきたJSONを貼り戻して「発注書に反映」を押してください（全部でまとめて反映されます）。`;
+    box.appendChild(msg);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:6px';
+    manualParts.forEach((pt, k) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn btn-sm';
+      b.textContent = `指示 ${pt.i}/${pt.n} をコピー`;
+      b.addEventListener('click', async () => {
+        const ok = await copyText(pt.prompt);
+        toast(ok ? `指示 ${pt.i}/${pt.n} をコピーしました` : 'コピーできませんでした', ok);
+      });
+      row.appendChild(b);
+    });
+    box.appendChild(row);
   }
 
   async function copyManualPrompt() {
-    const m = manualPrompt();
-    if (!m) return;
-    const ok = await copyText(m.text);
-    toast(ok ? '指示をコピーしました。Claudeのチャットに貼り付けて送ってください' : 'コピーできませんでした。ブラウザの設定を確認してください', ok);
+    if (!$('transcript').value.trim()) { toast('文字起こしが空です', false); return; }
+    if (!runClean()) return;
+    const specs = aiFieldSpecs();
+    manualParts = makeParts(specs, MANUAL_MAX_BYTES);
+    manualResults = [];
+    renderManualParts();
+    const ok = await copyText(manualParts[0].prompt);
+    const multi = manualParts.length > 1;
+    toast(ok ? (multi ? `長いため${manualParts.length}つに分けました。1つ目の指示をコピーしました` : '指示をコピーしました。Claudeのチャットに貼り付けて送ってください') : 'コピーできませんでした。ブラウザの設定を確認してください', ok);
     if (ok) { $('aiSettings').open = true; $('manualJson').focus(); }
   }
 
@@ -1770,11 +1840,18 @@
     if (!obj) { setAiStatus('danger', '貼り付けた内容から、JSONを読み取れませんでした。Claudeの返答の { から } までを、そのまま貼り付けてください。'); return; }
     if (!utterances.length) { loadUtterances(); guessRoles(utterances); }
     const specs = aiFieldSpecs();
-    const n = applyAiResult(obj, specs);
+    manualResults.push(obj);
+    const merged = mergeAiResults(manualResults, specs);
+    const n = applyAiResult(merged, specs);
     reviewed = true;
     refreshAll();
-    const confirms = String(obj.confirm_points || '').split('\n').map(x => x.trim()).filter(Boolean);
+    const total = manualParts.length, got = manualResults.length;
     const lines = [n ? `貼り付けた結果から ${n} 項目を反映しました。内容を必ず目視で確認してください。` : '反映できる項目がありませんでした。商材の選択と、Claudeに貼った指示が今の商材のものか確認してください。'];
+    if (total > 1) {
+      lines.push(got < total ? `${total}つに分けたうちの ${got} つ目まで反映済みです。続けて、残りの指示をClaudeに送り、返ってきたJSONを貼り戻してください。` : `${total}つすべてを反映しました。`);
+      $('manualJson').value = '';
+    }
+    const confirms = confirmLines(merged);
     if (confirms.length) lines.push('Claudeからの確認事項:', ...confirms.map(c => '・' + c));
     setAiStatus(n ? 'ok' : 'danger', lines.join('\n'));
     toast(n ? `${n}項目を反映しました。内容を確認してください` : '反映できる項目がありません', n > 0);
@@ -1832,7 +1909,7 @@
       const t = aiTranscriptText();
       const s = ['claude', $('product').value, t].join('\u0000');
       if (s === aiLastKey) { setAiStatus('info', 'この内容は、すでにClaudeで読み取り済みです（同じ内容は再送しません）。内容を変えると、もう一度読み取ります。'); return; }
-      return runClaudeAnalyze(t, s);
+      return runClaudeAnalyze(s);
     }
     const key = $('aiKey').value.trim();
     if (!key) {
@@ -1842,10 +1919,6 @@
     }
     if (!utterances.length) return;
     const transcript = aiTranscriptText();
-    if (transcript.length > AI_MAX_CHARS) {
-      setAiStatus('danger', `文字起こしが長すぎるため（${transcript.length.toLocaleString()}文字）、AIには送っていません。前半と後半に分けて、それぞれ解析してください。規則ベースの解析結果は反映済みです。`);
-      return;
-    }
     const model = $('aiModel').value;
     const sig = [$('product').value, model, transcript].join('\u0000');
     if (sig === aiLastKey) {
@@ -1857,30 +1930,41 @@
     setAiStatus('info', 'AIが会話の流れを読み取っています…（数十秒かかることがあります）');
     try {
       const specs = aiFieldSpecs();
-      const { res, json } = await callAnthropic({ key, model, user: buildAiUserMessage(transcript), schema: buildAiSchema(specs) });
-      if (!res.ok) { setAiStatus('danger', aiErrorText(res, json) + '\n規則ベースの解析結果は、そのまま残しています。'); return; }
-      if (json.stop_reason === 'refusal') {
-        setAiStatus('danger', 'AIがこの内容の読み取りを断りました。規則ベースの解析結果は、そのまま残しています。');
-        return;
+      const groups = splitUtterances(utterances, l => aiTranscriptText(l).length <= AI_MAX_CHARS);
+      const results = [];
+      let inTok = 0, outTok = 0, usedModel = model;
+      for (let k = 0; k < groups.length; k++) {
+        if (groups.length > 1) setAiStatus('info', `長いため${groups.length}つに分けて読み取ります（${k + 1}/${groups.length}）…`);
+        const user = buildAiUserMessage(aiTranscriptText(groups[k]), { i: k + 1, n: groups.length });
+        const { res, json } = await callAnthropic({ key, model, user, schema: buildAiSchema(specs) });
+        if (!res.ok) { setAiStatus('danger', aiErrorText(res, json) + '\n規則ベースの解析結果は、そのまま残しています。'); return; }
+        if (json.stop_reason === 'refusal') {
+          setAiStatus('danger', 'AIがこの内容の読み取りを断りました。規則ベースの解析結果は、そのまま残しています。');
+          return;
+        }
+        const text = (json.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+        let part;
+        try {
+          part = JSON.parse(text);
+        } catch {
+          setAiStatus('danger', json.stop_reason === 'max_tokens'
+            ? 'AIの出力が長すぎて途中で切れました。文字起こしを分けて、もう一度お試しください。規則ベースの解析結果は、そのまま残しています。'
+            : 'AIの応答を読み取れませんでした。もう一度お試しください。規則ベースの解析結果は、そのまま残しています。');
+          return;
+        }
+        results.push(part);
+        const u0 = json.usage || {};
+        inTok += Number(u0.input_tokens || 0); outTok += Number(u0.output_tokens || 0);
+        if (json.model) usedModel = json.model;
       }
-      const text = (json.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-      let obj;
-      try {
-        obj = JSON.parse(text);
-      } catch {
-        setAiStatus('danger', json.stop_reason === 'max_tokens'
-          ? 'AIの出力が長すぎて途中で切れました。文字起こしを分けて、もう一度お試しください。規則ベースの解析結果は、そのまま残しています。'
-          : 'AIの応答を読み取れませんでした。もう一度お試しください。規則ベースの解析結果は、そのまま残しています。');
-        return;
-      }
+      const obj = mergeAiResults(results, specs);
       const n = applyAiResult(obj, specs);
       aiLastKey = sig;
       reviewed = true;
       refreshAll();
-      const u = json.usage || {};
-      const confirms = String(obj.confirm_points || '').split('\n').map(x => x.trim()).filter(Boolean);
-      const lines = [`AIが ${n} 項目を反映しました。内容を必ず目視で確認してください。`];
-      if (u.input_tokens != null) lines.push(`使用したトークン: 入力 ${Number(u.input_tokens).toLocaleString()} ／ 出力 ${Number(u.output_tokens || 0).toLocaleString()}（モデル: ${json.model || model}）`);
+      const confirms = confirmLines(obj);
+      const lines = [`AIが ${n} 項目を反映しました。内容を必ず目視で確認してください。` + (groups.length > 1 ? `（${groups.length}つに分けて読み取りました）` : '')];
+      if (inTok) lines.push(`使用したトークン: 入力 ${inTok.toLocaleString()} ／ 出力 ${outTok.toLocaleString()}（モデル: ${usedModel}）`);
       if (confirms.length) lines.push('AIからの確認事項:', ...confirms.map(c => '・' + c));
       setAiStatus('ok', lines.join('\n'));
       toast(`AIが${n}項目を反映しました。内容を確認してください`);
