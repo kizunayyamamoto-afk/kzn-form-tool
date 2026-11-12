@@ -224,6 +224,12 @@
       <p class="hint" style="margin-bottom:8px">お客様に見せた資料・サイトのURL、既存サイト、Instagram・X・Facebook、GoogleビジネスプロフィールのURLを、改行やスペース区切りでまとめて貼ってください。種類は自動で振り分けます（変更もできます）。下の商材ボタンを押すと、発注書の該当欄に転記されます。</p>
       <textarea id="startUrls" rows="4" placeholder="https://..." class="control"></textarea>
       <div id="startUrlList" class="url-list"></div>
+      <details id="startGbpBox" style="margin-top:10px">
+        <summary style="cursor:pointer;font-weight:600">Googleマップの情報を読み取る<span class="pill pill-muted" style="margin-left:6px">任意</span></summary>
+        <p class="hint" style="margin:8px 0">GoogleマップのURLを上に貼ると、URLに含まれる店名を読み取ります。住所・電話・営業時間は、Googleマップのお店の画面から、店名・住所・電話番号・営業時間の部分をコピーして、下に貼ってください（ツールがGoogleへ接続することはありません）。</p>
+        <textarea id="startGbp" rows="5" placeholder="例）&#10;○○洋菓子店&#10;住所: 京都府京都市○○区△△町1-2-3&#10;電話番号: 075-000-0000&#10;月曜日 10:00〜19:00 …" class="control"></textarea>
+        <div id="startGbpPreview" class="hint" style="margin-top:6px"></div>
+      </details>
     </div>
 
     <div class="start-block">
@@ -2120,6 +2126,7 @@
   const IG_HANDLE_RE = /instagram\.com\/(?!p\/|reel\/|reels\/|explore\/|stories\/)([A-Za-z0-9._]+)/i;
   const X_HANDLE_RE = /(?:x\.com|twitter\.com)\/(?!i\/|home|search|intent\/)([A-Za-z0-9_]+)/i;
   let startUrls = [];            // [{ url, cat }]
+  let startGbpText = '';         // 起動画面に貼ったGoogleマップの情報（画面を閉じても使えるよう保持）
   const lockedIds = new Set();   // 起動時のURLから入れた欄（文字起こしの解析で上書きしない）
 
   function guessUrlCat(u) {
@@ -2173,6 +2180,66 @@
     renderStartUrlList();
   }
 
+  // ---- Googleマップ（GBP）の情報 ----
+  // URLの /maps/place/店名/ や ?q=店名 から店名を取り出す（短縮URLからは取れない）
+  function gbpNameFromUrl(u) {
+    let raw = '';
+    const m = u.match(/google\.[a-z.]+\/maps\/place\/([^/@?#]+)/i);
+    if (m) raw = m[1];
+    else {
+      const q = u.match(/google\.[a-z.]+\/maps[^#]*[?&](?:q|query)=([^&#]+)/i);
+      if (q) raw = q[1];
+    }
+    if (!raw) return '';
+    let name = '';
+    try { name = decodeURIComponent(raw.replace(/\+/g, ' ')).trim(); } catch { name = raw.replace(/\+/g, ' ').trim(); }
+    if (!name || /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(name)) return '';   // 座標だけのときは店名ではない
+    return name;
+  }
+
+  const GBP_DAY = /[月火水木金土日](?:曜日|曜)?/;
+  // お店の画面からコピーしたテキストを、店名・郵便番号・住所・電話・営業時間に分ける
+  function parseGbpText(text) {
+    const out = { name: '', zip: '', addr: '', tel: '', hours: '' };
+    const lines = String(text || '').split(/\r?\n/).map(l => l.replace(/[\u200b\ufeff]/g, '').trim()).filter(Boolean);
+    const strip = (l) => l.replace(/^(住所|所在地|電話番号?|電話|TEL|Tel|営業時間|定休日|店名|名称)\s*[:：]\s*/, '').trim();
+    const telRe = /(0\d{1,4}[-ー−‐－]\d{1,4}[-ー−‐－]\d{3,4})/;
+    const hourLines = [];
+    const used = new Set();
+    lines.forEach((l, i) => {
+      const v = strip(l);
+      const tel = v.match(telRe);
+      if (!out.tel && tel && v.length <= 40 && !/\d{1,2}:\d{2}/.test(v)) { out.tel = tel[1].replace(/[ー−‐－]/g, '-'); used.add(i); return; }
+      const zip = v.match(/〒?\s*(\d{3})[-ー−‐－]?(\d{4})/);
+      if (!out.addr && (/〒/.test(v) || /(北海道|[^\s]{2,3}[都府県])[^\s]*[市区町村郡]/.test(v)) && !GBP_DAY.test(v.slice(0, 3))) {
+        if (zip) out.zip = '〒' + zip[1] + '-' + zip[2];
+        out.addr = v.replace(/〒?\s*\d{3}[-ー−‐－]?\d{4}\s*/, '').replace(/^日本[、,]\s*/, '').trim();
+        used.add(i); return;
+      }
+      if (/^(営業時間|定休日|営業時間と定休日)$/.test(v)) { used.add(i); return; }   // 見出しだけの行
+      if ((GBP_DAY.test(v) && /\d{1,2}:\d{2}/.test(v)) || /^(営業時間|定休日)/.test(l) || /^\d{1,2}:\d{2}\s*[〜~～–-]\s*\d{1,2}:\d{2}/.test(v) || /^(24時間営業|定休日)/.test(v)) {
+        hourLines.push(v.replace(/\s+/g, ' ')); used.add(i);
+      }
+    });
+    out.hours = hourLines.join(' / ');
+    const nameLine = lines.find((l, i) => !used.has(i) && l.length <= 60 && !/https?:\/\//.test(l) && !/^(営業中|営業時間|閉店|定休日|ウェブサイト|ルート|保存|共有|クチコミ|写真|概要|メニュー|予約)/.test(l) && !/^[\d.]+(\s|\()/.test(l));
+    if (nameLine) out.name = strip(nameLine);
+    return out;
+  }
+
+  // 起動画面の情報を、いまの内容に合わせてまとめる（URLの店名 < 貼り付けた店名）
+  function gbpInfo() {
+    const text = parseGbpText(startGbpText);
+    const urlName = startUrls.filter(r => r.cat === 'gbp').map(r => gbpNameFromUrl(r.url)).find(Boolean) || '';
+    return { ...text, name: text.name || urlName };
+  }
+
+  function renderGbpPreview() {
+    const g = gbpInfo();
+    const items = [['店名', g.name], ['郵便番号', g.zip], ['住所', g.addr], ['電話', g.tel], ['営業時間', g.hours]].filter(x => x[1]);
+    $('startGbpPreview').textContent = items.length ? '読み取り結果: ' + items.map(x => `${x[0]}=${x[1]}`).join(' ／ ') : '';
+  }
+
   // 現在の商材の入力欄に合わせた { 欄id: 値 } と、転記先が無くスキップするURL数
   function startUrlFields() {
     const by = (c) => startUrls.filter(r => r.cat === c).map(r => r.url);
@@ -2183,8 +2250,14 @@
     const xx = accountFirst(xx0, X_HANDLE_RE);
     const handleOf = (u, re) => { const m = u.match(re); return m ? '@' + m[1] : ''; };
     const out = {};
+    const g = gbpInfo();
     let skipped = 0;
     if (isNest()) {
+      if (g.name) Object.assign(out, { shop: g.name, store_name: g.name });
+      if (g.zip) out.store_zip = g.zip;
+      if (g.addr) out.store_addr = g.addr;
+      if (g.tel) out.store_tel = g.tel;
+      if (g.hours) out.store_hours = g.hours;
       if (ig[0]) Object.assign(out, { ig_url: ig[0], ig_has: 'あり', ig_name: handleOf(ig[0], IG_HANDLE_RE) });
       if (fb[0]) Object.assign(out, { fb_url: fb[0], fb_has: 'あり' });
       if (xx[0]) Object.assign(out, { x_url: xx[0], x_has: 'あり', x_name: handleOf(xx[0], X_HANDLE_RE) });
@@ -2204,6 +2277,8 @@
       other.forEach(u => notes.push('その他: ' + u));
       const urls = [...site.map(u => '【既存サイト】' + u), ...sample.map(u => '【提示資料・サンプル】' + u)];
       if (urls.length) out.urls = urls.join('\n');
+      const gbpLines = [g.zip && g.addr ? `${g.zip} ${g.addr}` : (g.addr || g.zip), g.tel && `電話: ${g.tel}`, g.hours && `営業時間: ${g.hours}`].filter(Boolean);
+      if (gbpLines.length) notes.push('【Googleマップ】' + gbpLines.join(' ／ '));
       if (notes.length) out.notes = notes.join('\n');
     }
     return { fields: out, skipped };
@@ -2234,6 +2309,12 @@
     $('btnRestart').classList.remove('hidden');
     renderAll();
     const { n, skipped } = applyStartUrls();
+    const gName = gbpInfo().name;
+    if (gName && !$('client').value.trim()) {
+      $('client').value = gName;
+      $('clientAuto').textContent = 'Googleマップから入力・要確認';
+      $('clientAuto').classList.remove('hidden');
+    }
     refreshAll();
     $('transcript').focus();
     if (n || skipped) {
@@ -2246,7 +2327,8 @@
     const byQuery = { nest: 'nest', raqmo: 'RAQMO' };
     let q = '';
     try { q = (new URLSearchParams(location.search).get('product') || '').toLowerCase(); } catch { q = ''; }
-    $('startUrls').addEventListener('input', parseStartUrls);
+    $('startUrls').addEventListener('input', () => { parseStartUrls(); renderGbpPreview(); });
+    $('startGbp').addEventListener('input', () => { startGbpText = $('startGbp').value; renderGbpPreview(); });
     document.querySelectorAll('#startScreen [data-product]').forEach(b => {
       b.addEventListener('click', () => chooseProduct(b.dataset.product));
     });
