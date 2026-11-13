@@ -246,6 +246,20 @@
     </div>
 
     <div class="start-block">
+      <details id="srcBox">
+        <summary style="cursor:pointer;font-weight:600">案件の資料を取り込む<span class="pill pill-muted" style="margin-left:6px">任意</span></summary>
+        <p class="hint" style="margin:8px 0">Zoomの要約、Googleカレンダーの予定、Googleドライブの商談ノートの本文を、コピーして貼ってください。商材を選ぶと、発注書の欄に反映します。ツールがこれらのサービスへ接続することはありません（貼った文章だけを、ブラウザの中で読みます）。</p>
+        <label for="srcSummary" class="label">Zoomの要約（Zoom Revenue Accelerator・AI Companionなど）</label>
+        <textarea id="srcSummary" rows="4" class="control" placeholder="要約の文章を貼り付け。商材を選ぶと、そのまま解析します"></textarea>
+        <label for="srcCal" class="label" style="margin-top:8px;display:block">Googleカレンダーの予定（タイトルと説明）</label>
+        <textarea id="srcCal" rows="3" class="control" placeholder="例）&#10;【商談】○○株式会社様 ホームページ打ち合わせ&#10;（説明欄の文章）"></textarea>
+        <label for="srcNote" class="label" style="margin-top:8px;display:block">商談ノート（Googleドキュメントなどの本文）</label>
+        <textarea id="srcNote" rows="5" class="control" placeholder="例）&#10;強み: 京都で30年続く手作りの洋菓子&#10;Instagram: https://www.instagram.com/…&#10;サイト: https://…"></textarea>
+        <div id="srcPreview" class="hint" style="margin-top:6px"></div>
+      </details>
+    </div>
+
+    <div class="start-block">
       <p class="label" style="margin:0">商材を選ぶ</p>
       <div class="tiles">
         <button type="button" data-product="nest" class="tile">
@@ -275,7 +289,7 @@
       <div class="card-body">
         <p class="hint" style="margin-bottom:10px">テキストを貼り付けるか、.vtt / .txt ファイルをここにドラッグ＆ドロップしてください。貼り付け・読み込みと同時に自動で解析して、右の発注書プレビューを埋めます。</p>
         <div id="dropzone" class="dropzone">
-          <textarea id="transcript" rows="12" placeholder="ここに文字起こしを貼り付け、または .vtt / .txt をドロップ" class="control control-plain"></textarea>
+          <textarea id="transcript" rows="12" placeholder="ここに文字起こし（またはZoomの要約）を貼り付け、または .vtt / .txt をドロップ" class="control control-plain"></textarea>
         </div>
         <div class="toolbar">
           <label class="btn btn-sm" style="cursor:pointer">
@@ -636,6 +650,18 @@
   // 話者ラベル「山田 太郎: 」。URL(https:)と時刻(10:00)は話者として扱わない
   const SPEAKER_RE = /^(?!https?:)([^\s:：「」。、]{1,20}(?:[ 　][^\s:：「」。、]{1,20}){0,2})\s*[:：](?!\/\/)(?!\d)\s*/;
 
+  const SUMMARY_HEAD_RE = /^(?:概要|要約|サマリー?|まとめ|次のステップ|ネクストステップ|アクションアイテム|詳細|議題|トピック|主なトピック|会議の概要|ミーティングの概要|Summary|Overview|Next steps?|Action items?|Key topics?|Details?)$/i;
+  // 要約（「お客様は、〜と述べました」の形）を、解析しやすい言い切りの文に戻す
+  const normalizeSummaryLine = (t) => String(t)
+    .replace(/^[\s　・･●○◎■□◆◇▶▷▼▽►\-–—•*#＞>※\d.)）]+/, '')
+    .replace(/^(?:お客様|顧客|クライアント|先方|相手方)(?:側)?は[、,，]?\s*/, '')
+    .replace(/(?:と|という(?:こと|旨)を)(?:述べ|話し|説明し|語り|回答し|共有し|伝え|発言し|コメントし)(?:まし)?た[。．]?$/, '。')
+    .replace(/とのこと(?:です|でした)?[。．]?$/, '。')
+    .trim();
+  // 話者の無い文章（要約・ノート）か。話者ラベルがある文字起こしは対象外
+  const isSpeakerless = (utts) => utts.length > 0 && utts.every(u => !u.speaker);
+  const analysisUtterances = () => (isSpeakerless(utterances) ? utterances.map(u => ({ ...u, text: normalizeSummaryLine(u.text) })).filter(u => u.text) : utterances);
+
   // Zoomの .vtt / .txt から、話者つきの発言リストを作る（タイムスタンプ・キュー番号・タグは除去）
   function parseUtterances(raw) {
     const lines = raw.replace(/\r\n?/g, '\n').replace(/^﻿/, '').split('\n');
@@ -657,7 +683,8 @@
       t = t.replace(/<[^>]+>/g, '');
       t = t.replace(/^\[?\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?\]?\s+/, '');              // 行頭のタイムスタンプ
       const label = t.match(SPEAKER_RE);
-      if (label) { speaker = label[1].trim(); t = t.slice(label[0].length); }
+      if (label && SUMMARY_HEAD_RE.test(label[1].trim())) t = t.slice(label[0].length);   // 「概要: …」「Next steps: …」は話者ではない
+      else if (label) { speaker = label[1].trim(); t = t.slice(label[0].length); }
       t = t.trim();
       if (t) out.push({ speaker, text: t });
     }
@@ -1488,7 +1515,8 @@
 
   function runAnalyze() {
     if (!runClean()) return;
-    const found = isNest() ? analyzeNest(utterances) : analyze(utterances);
+    const uts = analysisUtterances();
+    const found = isNest() ? analyzeNest(uts) : analyze(uts);
     const client = found.client;
     delete found.client;
     if (client && isNest()) { found.shop = client; found.store_name = client; }
@@ -1734,6 +1762,160 @@
     $('startGbpPreview').textContent = items.length ? '読み取り結果: ' + items.map(x => `${x[0]}=${x[1]}`).join(' ／ ') : '';
   }
 
+  /* ---------- 案件の資料の取り込み（商談ノート・カレンダーの予定・Zoomの要約）---------- */
+  // 貼った文章を、ブラウザの中のルールだけで読む（外部通信なし）。起動画面を閉じても使えるよう、入力時に保持する
+  let srcNoteText = '', srcCalText = '', srcSummaryText = '';
+  const SRC_LABELS = [
+    ['client',    /^(?:顧客名|お客様名|会社名|社名|店名|店舗名|屋号|クライアント|クライアント名)$/],
+    ['industry',  /^業種$/],
+    ['business',  /^(?:事業(?:内容)?|取扱(?:商品|サービス)?|お仕事|何をしている会社か)$/],
+    ['strength',  /^(?:強み|売り|特徴|アピール(?:ポイント)?|こだわり|お店の強み|会社の強み)$/],
+    ['trouble',   /^(?:困りごと|お困りごと|課題|悩み|現状の課題|現状)$/],
+    ['overview',  /^(?:案件概要|概要|目的|制作目的|依頼内容|やりたいこと|要望|ご要望|ゴール)$/],
+    ['target',    /^(?:ターゲット(?:層)?|想定(?:顧客|ユーザー)|顧客層)$/],
+    ['tone',      /^(?:トンマナ|デザイン(?:の)?(?:イメージ|希望|テイスト)?|雰囲気|イメージ|カラー)$/],
+    ['materials', /^(?:提供素材|素材)$/],
+    ['tel',       /^(?:電話(?:番号)?|TEL|Tel)$/],
+    ['addr',      /^(?:住所|所在地)$/],
+    ['zip',       /^(?:郵便番号|〒)$/],
+    ['hours',     /^(?:営業時間)$/],
+    ['site',      /^(?:サイト(?:URL)?|ホームページ|HP|WEB(?:サイト)?|既存サイト|URL)$/i],
+    ['ig',        /^(?:Instagram|インスタ(?:グラム)?|IG)$/i],
+    ['x',         /^(?:X|Twitter|ツイッター|エックス)$/i],
+    ['fb',        /^(?:Facebook|フェイスブック|FB)$/i],
+    ['gbp',       /^(?:GBP|Googleビジネス(?:プロフィール)?|Googleマップ|グーグルマップ)$/i],
+  ];
+  const srcKeyOf = (label) => { const l = String(label).replace(/[\s　*_`]/g, ''); const hit = SRC_LABELS.find(([, re]) => re.test(l)); return hit ? hit[0] : ''; };
+  const SRC_BULLET_RE = /^[\s　・･●○◎■□◆◇▶▷▼▽►\-–—•*#＞>※]+/;
+  const SRC_SKIP_URL_RE = /(zoom\.us|meet\.google\.com|calendar\.google\.com|teams\.microsoft\.com)/i;
+  const SRC_NONE_RE = /^(?:なし|ない|無し|未|やっていない|持っていない|使っていない|アカウントなし)/;
+
+  // 「強み: 値」「【強み】値」「■強み」の次の行、の形から項目を取り出す。ラベルの無い行は free に集める
+  function parseSourceNotes(text) {
+    const fields = {};
+    const free = [];
+    let cur = '';
+    const put = (k, v) => { v = v.trim(); if (v) fields[k] = fields[k] ? fields[k] + '\n' + v : v; };
+    for (const raw of String(text || '').replace(/\r\n?/g, '\n').split('\n')) {
+      if (!raw.trim()) { cur = ''; continue; }
+      const body = raw.trim().replace(SRC_BULLET_RE, '').replace(/\*\*/g, '').trim();
+      if (!body || /^https?:\/\/\S+$/.test(body)) continue;   // URLだけの行は、あとでまとめて拾う
+      const m = body.match(/^[【\[](.{1,14}?)[】\]]\s*[:：]?\s*(.*)$/) || body.match(/^(.{1,14}?)\s*[:：]\s*(.*)$/);
+      const k = m && !/^https?$/i.test(m[1]) ? srcKeyOf(m[1]) : '';
+      if (k) { cur = k; put(k, m[2]); continue; }
+      const head = srcKeyOf(body.replace(/^[【\[]|[】\]]$/g, ''));
+      if (head && body.length <= 14) { cur = head; continue; }
+      if (cur) put(cur, body); else free.push(body);
+    }
+    const urls = uniq((String(text || '').match(URL_RE) || []).map(u => u.replace(/[.,;:!?]+$/, '')).filter(u => !SRC_SKIP_URL_RE.test(u)));
+    return { fields, free: free.join('\n'), urls };
+  }
+
+  // カレンダーの予定のタイトルから顧客名を取り出す（「【商談】○○株式会社様 打ち合わせ」「KIZUNA × ○○様」など）
+  function calendarClient(text) {
+    const title = String(text || '').split('\n').map(l => l.trim()).find(Boolean) || '';
+    if (!title) return '';
+    const t = title.replace(/^(?:タイトル|件名|予定)\s*[:：]\s*/, '').replace(/[【\[][^】\]]*[】\]]/g, ' ').trim();
+    for (const part of t.split(/[×xX／/|｜＆&]/)) {
+      if (EXCLUDE_CLIENT_RE.test(part)) continue;
+      const name = part.trim()
+        .replace(/\s*(?:様|御中|さん)?[\s　]*(?:との|の)?(?:ホームページ|サイト|LP|オンライン|初回|\d+回目)?[\s　]*(?:打ち合わせ|打合せ|商談|ミーティング|MTG|mtg|ご提案|提案|キックオフ|ヒアリング|定例|面談|ご挨拶|Zoom|zoom)[\s\S]*$/, '')
+        .replace(/\s*(?:様|御中)$/, '').trim();
+      if (name.length >= 2 && name.length <= 20) return name;
+    }
+    return '';
+  }
+
+  const snsUrlOf = (kind, v) => {
+    if (/^https?:\/\//.test(v)) return v.split(/\s/)[0];
+    const h = v.replace(/^@/, '').trim().split(/\s/)[0];
+    if (!/^[A-Za-z0-9._]{2,30}$/.test(h)) return '';
+    return kind === 'ig' ? `https://www.instagram.com/${h}/` : kind === 'x' ? `https://x.com/${h}` : kind === 'fb' ? `https://www.facebook.com/${h}` : '';
+  };
+
+  // 取り込んだ資料の内容（商材に依らない形）。商談ノート > カレンダー の順に優先
+  function sourceInfo() {
+    const note = parseSourceNotes(srcNoteText);
+    const cal = parseSourceNotes(srcCalText);
+    const fields = { ...cal.fields, ...note.fields };
+    const urls = [...note.urls, ...cal.urls];
+    const none = {};
+    for (const kind of ['ig', 'x', 'fb']) {
+      const v = (fields[kind] || '').trim();
+      if (!v) continue;
+      if (SRC_NONE_RE.test(v)) none[kind] = true;
+      else { const u = snsUrlOf(kind, v); if (u) urls.push(u); }
+    }
+    if (fields.site && /^https?:\/\//.test(fields.site)) urls.push(fields.site.split(/\s/)[0]);
+    if (fields.gbp && /^https?:\/\//.test(fields.gbp)) urls.push(fields.gbp.split(/\s/)[0]);
+    const free = [note.free, cal.free].filter(Boolean).join('\n');
+    const client = fields.client || calendarClient(srcCalText) || '';
+    return { fields, urls: uniq(urls), none, free, client, any: !!(Object.keys(fields).length || urls.length || free || client) };
+  }
+
+  function renderSrcPreview() {
+    const i = sourceInfo();
+    const parts = [];
+    if (i.client) parts.push(`顧客名=${i.client}`);
+    const JA = { industry: '業種', business: '事業', strength: '強み', trouble: '困りごと', overview: '案件概要', target: 'ターゲット', tone: 'トンマナ', materials: '素材', tel: '電話', addr: '住所', zip: '郵便番号', hours: '営業時間', site: 'サイト', ig: 'Instagram', x: 'X', fb: 'Facebook', gbp: 'GBP' };
+    for (const [k, v] of Object.entries(i.fields)) { if (k !== 'client') parts.push(`${JA[k] || k}=${String(v).replace(/\n/g, ' ').slice(0, 24)}`); }
+    if (i.urls.length) parts.push(`URL ${i.urls.length}件`);
+    if (srcSummaryText.trim()) parts.push('Zoomの要約あり');
+    $('srcPreview').textContent = parts.length ? '読み取り結果: ' + parts.join(' ／ ') : '';
+  }
+
+  // 資料のURLを、起動画面のURL一覧に加える（種類は自動判定。既存サイトは最初の1件だけ）
+  function addSourceUrls(urls) {
+    for (const u of urls) {
+      if (startUrls.some(r => r.url === u)) continue;
+      let cat = guessUrlCat(u);
+      if (cat === 'site' && startUrls.some(r => r.cat === 'site')) cat = 'sample';
+      startUrls.push({ url: u, cat });
+    }
+  }
+
+  // 現在の商材の欄へ、取り込んだ資料の内容を入れる。手入力済みの欄は上書きしない（文字起こしの解析で、あとから上書きされることはある）
+  function applySourceInfo() {
+    const info = sourceInfo();
+    if (!info.any) return 0;
+    addSourceUrls(info.urls);
+    const f = info.fields;
+    const out = {};
+    // ラベルの無い文章は、要約と同じルールで読む
+    if (info.free) {
+      const uts = parseUtterances(info.free).map(u => ({ ...u, text: normalizeSummaryLine(u.text) })).filter(u => u.text);
+      if (uts.length) { const r = isNest() ? analyzeNest(uts) : analyze(uts); delete r.client; for (const [k, v] of Object.entries(r)) if (v) out[k] = v; }
+    }
+    if (isNest()) {
+      Object.assign(out, Object.fromEntries(Object.entries({ industry: f.industry, business: f.business, strength: f.strength, trouble: f.trouble,
+        store_tel: f.tel, store_addr: f.addr, store_zip: f.zip, store_hours: f.hours }).filter(([, v]) => v)));
+      if (info.client) { out.shop = info.client; out.store_name = info.client; }
+      for (const k of Object.keys(info.none)) out[k + '_has'] = 'なし';
+    } else {
+      Object.assign(out, Object.fromEntries(Object.entries({ overview: f.overview, business: f.business, strength: f.strength, trouble: f.trouble,
+        target: f.target, tone: f.tone, materials: f.materials }).filter(([, v]) => v)));
+      const store = [f.zip && f.addr ? `${f.zip} ${f.addr}` : (f.addr || f.zip), f.tel && `電話: ${f.tel}`, f.hours && `営業時間: ${f.hours}`].filter(Boolean);
+      if (store.length) out.notes = '【取り込んだ資料】' + store.join(' ／ ');
+      if (isRaqmo() && info.none.ig) out.mt_ig = 'なし';
+    }
+    let n = 0;
+    for (const [id, v] of Object.entries(out)) {
+      if (!v) continue;
+      if (filled(id) && !autoFilled.has(id) && !defaultIds.has(id)) continue;
+      values[id] = v;
+      autoFilled.add(id);
+      if (els[id]) { els[id].ta.value = v; autosize(els[id].ta); }
+      n++;
+    }
+    if (info.client && !$('client').value.trim()) {
+      $('client').value = info.client;
+      $('clientAuto').textContent = '資料から入力・要確認';
+      $('clientAuto').classList.remove('hidden');
+      n++;
+    }
+    return n;
+  }
+
   // 現在の商材の入力欄に合わせた { 欄id: 値 } と、転記先が無くスキップするURL数
   function startUrlFields() {
     const by = (c) => startUrls.filter(r => r.cat === c).map(r => r.url);
@@ -1802,6 +1984,7 @@
     $('productPill').classList.remove('hidden');
     $('btnRestart').classList.remove('hidden');
     renderAll();
+    const nSrc = applySourceInfo();
     const { n, skipped } = applyStartUrls();
     const gName = gbpInfo().name;
     if (gName && !$('client').value.trim()) {
@@ -1811,7 +1994,13 @@
     }
     refreshAll();
     $('transcript').focus();
-    if (n || skipped) {
+    if (srcSummaryText.trim()) {   // Zoomの要約が貼ってあれば、そのまま解析する
+      $('transcript').value = srcSummaryText;
+      runAnalyze();
+      return;
+    }
+    if (nSrc && !n && !skipped) toast(`取り込んだ資料から${nSrc}項目を反映しました。内容を確認してください`);
+    else if (n || skipped) {
       toast(`URLを${n}項目に転記しました${skipped ? `（転記先が無い${skipped}件はスキップ）` : ''}。文字起こしを入れると、残りの項目を自動で埋めます`);
     } else if (announce) {
       toast('文字起こし（.vtt / .txt）を入れるか貼り付けると、自動で項目を埋めます');
@@ -1829,6 +2018,10 @@
     $('placesKey').addEventListener('input', savePk);
     $('placesRemember').addEventListener('change', savePk);
     $('btnPlaces').addEventListener('click', lookupPlaces);
+    const srcIn = (id, set) => $(id).addEventListener('input', () => { set($(id).value); renderSrcPreview(); });
+    srcIn('srcSummary', v => { srcSummaryText = v; });
+    srcIn('srcCal', v => { srcCalText = v; });
+    srcIn('srcNote', v => { srcNoteText = v; });
     $('startGbp').addEventListener('input', () => { startGbpText = $('startGbp').value; renderGbpPreview(); });
     document.querySelectorAll('#startScreen [data-product]').forEach(b => {
       b.addEventListener('click', () => chooseProduct(b.dataset.product));
