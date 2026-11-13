@@ -1,0 +1,8 @@
+# Cloudflare Workers の設定（シークレットは書かない。`wrangler secret put` で登録する）
+name = "kzn-zoom-ra-relay"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+[vars]
+# 発注書作成ツールを開くURLの元（末尾の / なし）。公開サイトに合わせて変える
+ALLOWED_ORIGIN = "https://kizunayyamamoto-afk.github.io"
