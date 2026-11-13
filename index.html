@@ -228,21 +228,6 @@
         <summary style="cursor:pointer;font-weight:600">Googleマップの情報を読み取る<span class="pill pill-muted" style="margin-left:6px">任意</span></summary>
         <p class="hint" style="margin:8px 0">GoogleマップのURLを上に貼ると、URLに含まれる店名を読み取ります。住所・電話・営業時間は、Googleマップのお店の画面から、店名・住所・電話番号・営業時間の部分をコピーして、下に貼ってください（ツールがGoogleへ接続することはありません）。</p>
         <div class="alert alert-info" style="margin:0 0 10px">
-          <b>キーなしで調べる: Claudeに調べてもらう</b>
-          <p class="hint" style="margin:6px 0">店名とGoogleマップのURLを、お使いのClaude（Web検索が使えるもの）に調べさせて、住所・電話・営業時間を取り込みます。APIキーは不要で、このツールからは何も送信しません。</p>
-          <ol style="margin:0 0 0 18px;padding:0">
-            <li>下の「店名」（またはGoogleマップのURL）を入れて、「調べる指示をコピー」を押す。</li>
-            <li>お使いのClaudeのチャットに貼り付けて送る。</li>
-            <li>返ってきたJSONを、下の欄に貼って「取り込む」を押す。</li>
-          </ol>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-            <button id="btnResearchCopy" type="button" class="btn btn-sm btn-primary">調べる指示をコピー</button>
-            <button id="btnResearchImport" type="button" class="btn btn-sm">取り込む</button>
-          </div>
-          <textarea id="researchJson" rows="3" class="control" style="margin-top:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px" placeholder="Claudeが返したJSONをここに貼り付け"></textarea>
-          <div id="researchStatus" class="hint" style="margin-top:4px"></div>
-        </div>
-        <div class="alert alert-info" style="margin:0 0 10px">
           <b>住所・電話・営業時間をGoogleから取得する（任意・初期値は何も送信しません）</b>
           <p class="hint" style="margin:6px 0">Google Places APIのキーを入れて、下の「取得」を押したときだけ、店名（と、URLにあれば地図上の位置）を places.googleapis.com へ送って、住所・電話・営業時間を受け取ります。文字起こしや顧客情報は送りません。キーは、Google Cloudで「Places API (New)」を有効にして発行し、HTTPリファラで制限してください（取得1回ごとにGoogle側の利用料がかかります）。</p>
           <label for="placesName" class="label">店名（URLから読み取れないときは入力）</label>
@@ -298,7 +283,6 @@
             <input id="fileInput" type="file" accept=".vtt,.txt,text/plain,text/vtt" class="hidden">
           </label>
           <button id="btnClipboard" type="button" class="btn btn-sm"><svg class="icon" aria-hidden="true"><use href="#i-clip"/></svg>クリップボードから取り込む</button>
-          <button id="btnManualAi" type="button" class="btn btn-sm" title="APIキー不要。文字起こしと項目の指示をコピーして、お使いのClaudeのチャットに貼り付けます"><svg class="icon" aria-hidden="true"><use href="#i-clip"/></svg>Claudeに読み取らせる(キー不要)</button>
           <button id="btnClean" type="button" class="btn btn-ghost btn-sm">タイムスタンプ・話者名を除去</button>
           <span id="cleanStat" class="hint"></span>
         </div>
@@ -310,71 +294,13 @@
         </div>
 
         <button id="btnAnalyze" type="button" class="btn btn-primary btn-lg btn-block"><svg class="icon" aria-hidden="true"><use href="#i-wand"/></svg><span id="analyzeLabel">自動解析して発注書に反映</span></button>
-        <div id="aiStatus" class="alert hidden" style="margin:12px 0 0" role="status"></div>
-        <p class="hint" style="margin-top:10px">※ 解析は、初期設定ではブラウザ内のルールベースで行います（AI・外部送信なし）。「AI解析の設定」をオンにすると、AIが会話の流れを読んで精度を上げます。抽出結果は必ず目視で確認してください。</p>
+        <p class="hint" style="margin-top:10px">※ 解析は、ブラウザ内のルールベースで行います（AI・外部送信なし）。抽出結果は必ず目視で確認してください。</p>
       </div>
     </div>
 
-    <details id="aiSettings" class="card">
-      <summary>
-        <span class="step-no">2</span>
-        <span class="card-title">AI解析の設定</span>
-        <span id="aiPill" class="pill pill-muted">オフ</span>
-        <svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>
-      </summary>
-      <div class="card-body">
-        <div class="form-stack">
-          <div id="manualAi" class="alert alert-info" style="margin:0">
-            <b>APIキーなしで使う(コピー&貼り付け)</b>
-            <ol style="margin:6px 0 0 18px;padding:0">
-              <li>「指示をコピー」を押す(文字起こしと項目の指示がコピーされます)。</li>
-              <li>お使いのClaudeのチャット(claude.ai など)に貼り付けて送る。</li>
-              <li>返ってきたJSONをコピーして、下の欄に貼り、「発注書に反映」を押す。</li>
-            </ol>
-            <p class="hint" style="margin:6px 0 0">このツールからは何も送信されません。コピーした文字起こしを貼るのは、あなたが使うClaudeのチャットです。社内の取り扱いルールに沿って使ってください。認証情報の欄は指示に含めず、貼り付けた結果にあっても反映しません。</p>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-              <button id="btnCopyPrompt" type="button" class="btn btn-sm btn-primary">指示をコピー</button>
-              <button id="btnImportJson" type="button" class="btn btn-sm">発注書に反映</button>
-            </div>
-            <div id="manualParts" class="hidden" style="margin-top:8px"></div>
-            <textarea id="manualJson" rows="4" class="control" style="margin-top:8px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px" placeholder="Claudeが返したJSONをここに貼り付け"></textarea>
-          </div>
-          <p class="hint">規則ベースの解析に加えて、AI（Claude）が<b>会話の流れ</b>を読み、お客様の事業・強み・困りごと・やりたいこと・要望などを発注書に入れます。営業の提案にお客様がうなずいた内容も踏まえます。<b>オンにすると、文字起こしと項目の定義が Anthropic の API（api.anthropic.com）へ送信されます。</b>お客様の情報が含まれるため、社内の取り扱いルールに沿って使ってください。初期値はオフです。</p>
-          <label class="check-row">
-            <input id="aiEnabled" type="checkbox">
-            解析のときにAIも使う
-          </label>
-          <label id="aiModeRow" class="hidden">
-            <span class="label">接続方法</span>
-            <select id="aiMode" class="control" style="margin-top:5px">
-              <option value="claude">Claude（このページに内蔵・APIキー不要）</option>
-              <option value="api">Anthropic APIキーを使う</option>
-            </select>
-            <span class="hint" style="display:block;margin-top:6px">claude.ai で開いているときだけ選べます。解析は、ページを開いている人のClaudeの利用枠で行われ、最初の1回だけ許可の確認が出ます。</span>
-          </label>
-          <div id="aiApiBox" class="form-stack">
-          <label>
-            <span class="label">Anthropic APIキー</span>
-            <input id="aiKey" type="password" autocomplete="off" placeholder="sk-ant-..." class="control" style="margin-top:5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px">
-          </label>
-          <label class="check-row">
-            <input id="aiRemember" type="checkbox">
-            このブラウザのLocalStorageに保存する（共有PCでは非推奨）
-          </label>
-          <label>
-            <span class="label">モデル</span>
-            <select id="aiModel" class="control" style="margin-top:5px"></select>
-          </label>
-          <p class="hint">料金は、モデルと文字起こしの長さによって、1回の解析ごとにAPI利用料がかかります（解析後に、使ったトークン数を表示します）。APIキーは、このブラウザにだけ保存され、Anthropic以外へは送信しません。AIが失敗しても、規則ベースの解析結果はそのまま残ります。</p>
-          <div><button id="btnClearAiKey" type="button" class="btn btn-sm" style="color:var(--danger)">保存済みのキーを削除</button></div>
-          </div>
-        </div>
-      </div>
-    </details>
-
     <details id="hsSettings" class="card">
       <summary>
-        <span class="step-no">3</span>
+        <span class="step-no">2</span>
         <span class="card-title">HubSpot接続設定</span>
         <svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>
       </summary>
@@ -416,7 +342,7 @@
 
     <div class="card">
       <div class="card-head">
-        <span class="step-no">4</span>
+        <span class="step-no">3</span>
         <h2 class="card-title">発注書プレビュー（編集可能）</h2>
         <span id="previewKind" class="pill pill-brand"></span>
         <span class="head-note"><span class="req-star">*</span> は着工に必要な必須項目</span>
@@ -1178,7 +1104,6 @@
     const onInput = () => {
       values[f.id] = ta.value;
       autoFilled.delete(f.id);
-      aiFilled.delete(f.id);
       defaultIds.delete(f.id);
       autosize(ta);
       refreshAll();
@@ -1315,7 +1240,7 @@
       e.star.classList.toggle('hidden', !r);
       e.badge.classList.toggle('hidden', !missing);
       e.auto.classList.toggle('hidden', !autoFilled.has(id));
-      e.auto.textContent = aiFilled.has(id) ? 'AI抽出・要目視確認' : '自動抽出・要目視確認';
+      e.auto.textContent = '自動抽出・要目視確認';
       e.ta.className = 'control' + (missing ? ' is-missing' : '');
       const w = e.f.warn ? e.f.warn((values[id] || '').trim()) : '';
       e.warn.textContent = w;
@@ -1540,537 +1465,6 @@
     }
   }
 
-  /* ---------- ⑤ AI解析（任意・オプトイン） ---------- */
-  // 規則ベースの解析に加えて、Anthropic API（Claude）で文字起こしの会話の流れを読み、発注書の項目を埋める。
-  // 初期値はオフ。オンにして利用者がAPIキーを入力したときだけ、文字起こしと項目の定義を api.anthropic.com へ送る。
-  // 認証情報（メール・パスワード等）の欄は、AIに渡さず、返ってきても反映しない。
-  const AI_ENDPOINT = 'https://api.anthropic.com/v1/messages';
-  const AI_API_VERSION = '2026-10-21';
-  const AI_FALLBACK_BETA = 'server-side-fallback-2026-07-01';
-  const AI_MODELS = [
-    ['claude-opus-5-5', 'Claude Opus 5.5（高精度・標準）'],
-    ['claude-sonnet-5-5', 'Claude Sonnet 5.5（速い・低コスト）'],
-    ['claude-haiku-5-5', 'Claude Haiku 5.5（最安・簡易）'],
-  ];
-  const AI_NO_FALLBACK_MODEL = 'claude-haiku-5-5';   // サーバー側のフォールバックが無いモデル
-  const AI_MAX_CHARS = 400000;                       // これを超える文字起こしは送らず、分割を案内する
-  const AI_TIMEOUT_MS = 240000;
-  const AI_SKIP_IDS = new Set(['login_email', 'login_pw', 'fb_pw', 'ig_pw', 'x_pw', 'mt_igpw']);
-  const AI_MARK_IDS = new Set([...PRODUCT_IDS, 'pr_meeto', 'pr_moel', 'pr_mofl']);
-  const AI_MARK_NOTE = '契約・発注することが明確な場合だけ「●」（個数・期間などの言及があれば「●」のあとに続ける）。言及が無い・提案だけの場合は空文字';
-  const aiFilled = new Set();      // AIが入れた欄（バッジ表示用）
-  let aiBusy = false;
-  let aiLastKey = '';              // 直近に成功した解析の内容（同じ内容は再送しない）
-
-  // 項目ごとの書き方の指示（AIに渡す）。ここに無い項目は、ラベルと補足から作る
-  const AI_NOTES = {
-    overview: 'お客様が今回の制作で実現したいこと・目的・やりたいこと。意味の通る書き言葉で、1〜3文。営業の自社紹介は入れない',
-    business: '何をしている会社・お店か、何を売り込みたいか（事業内容・主力商品・目標）',
-    trouble: '今困っていること。集客・求人は、どんなことに困っているかを具体的に（複数あれば改行で区切る）',
-    strength: '会社・お店としての売りや強み（実績・年数・商品・立地・評判・技術など）。代表個人の経歴や人柄は入れない',
-    target: '想定するお客様像（年代・性別・属性・地域など）',
-    tone: 'デザインの希望（雰囲気・色・参考にしたい印象）。お客様が希望または了承したものだけ',
-    urls: '参考にしたいサイト・競合サイトのURL（1行に1件）。文字起こしにあるURLだけ',
-    materials: '提供素材の有無を「ロゴ: あり / 画像・写真: なし」の形で（ロゴ・画像・写真・原稿・ワイヤーフレーム）',
-    industry: '業種を簡潔に（例: 洋菓子店、美容室）',
-    shop: '店舗名（正式表記）',
-    freq: 'コンサルティングデータプロンプトの更新頻度の希望。言及が無ければ空文字',
-    line_reg: 'nest公式LINEの登録状況（登録済み／未／回収時に登録 など）',
-    fb_has: 'Facebookの有無。「あり」または「なし」。言及が無ければ空文字',
-    ig_has: 'Instagramの有無。「あり」または「なし」。言及が無ければ空文字',
-    x_has: 'Xの有無。「あり」または「なし」。言及が無ければ空文字',
-    gbp_has: 'Googleビジネスプロフィールの有無。「あり」または「なし」。言及が無ければ空文字',
-    gbp_owner: 'GBPのオーナー権限の有無（あり／なし）。お客様が答えた場合だけ',
-    gbp_kizuna: 'KIZUNAへの権限付与の状況（済／未）。言及が無ければ空文字',
-    store_hours: '営業時間と定休日（例: 10:00〜19:00 定休:水曜）',
-    store_tel: '電話番号（文字起こしの表記のまま）',
-    store_zip: '郵便番号（例: 〒610-0000）',
-    store_addr: '住所（文字起こしの表記のまま）',
-    site_owner: 'サイトの保有者（KIZUNA作成／お客様保有／制作中（他社）など）',
-    irregular: '通常と違う約束・注意点（他社との併用、補助金、時期の制約、窓口・決裁者、連絡手段など）。無ければ空文字',
-  };
-
-  const AI_SYSTEM_PROMPT = [
-    'あなたは、営業の商談（Zoomの文字起こし）から、制作チームへ渡す発注書の項目を抜き出すアシスタントです。',
-    '',
-    '# 目的',
-    '文字起こしを最初から最後まで読み、会話の流れをつかんだうえで、発注書の各項目に、制作チームがそのまま使える形で記入します。',
-    'お客様の事業、強み、困りごと、やりたいこと・要望を取りこぼさないでください。',
-    '',
-    '# 守ること',
-    '1. 事実だけを書く。文字起こしに根拠が無いことは書かない（推測・創作は禁止）。言及が無い項目は空文字にする。',
-    '2. 話者は「[営業]」（KIZUNA側。サービスを提案・説明する人）と「[お客様]」（発注する側）に分けてある。お客様の事業・強み・困りごと・希望を優先する。営業の自社紹介・サービス説明・料金・自社の実績は、お客様の項目に入れない。',
-    '3. 営業が提案・確認した内容に、お客様が「はい」「そうですね」「お願いします」などと肯定した場合は、お客様の希望として採用する。否定・保留（「ちょっと違う」「検討します」など）された提案は採用しない。お客様があとから訂正した場合は、訂正後を採用する。',
-    '4. 会話の流れ（話題の転換、言い直し、訂正、最後に合意した内容）を読む。日付や数字は、何についての話かを確かめてから使う（打ち合わせの日程を納期などと取り違えない）。',
-    '5. 【文章の書き方】読むのは、商談に同席していないデザイナー・設定担当者です。会話の抜き書きではなく、その人が一度読んで内容を正しく理解できる、正しい書き言葉の日本語に書き直す。',
-    '   ・話し言葉・口癖・言いよどみ・相づち・「えーと」「なんか」「〜ですかね」「〜みたいな」などは使わず、「〜したい」「〜である」「〜を希望」のように、言い切りの文（常体）か体言止めに整える。',
-    '   ・主語・目的語を補い、「それ」「あれ」「そこ」「この前の」などの指示語や省略は、何を指すか具体的に書く。1文だけ読んでも意味が通るようにする。',
-    '   ・意味が通らない断片や、聞き取りの誤りと思われる語は、そのまま書かず、前後の文脈から確かな範囲だけ書き、疑わしい点は confirm_points に回す。',
-    '   ・1項目は3文以内を目安にし、複数あるときは改行で区切る。長い発言は、要点だけを簡潔にまとめる。',
-    '   ・固有名詞・数字・電話番号・住所・URLは、文字起こしの表記のままにする。事実の追加・誇張・言い換えによる意味の変化はしない。',
-    '   ・confirm_points も同じく、読んだ人が何を確認すべきか分かる、簡潔な文章で書く。',
-    '6. 強みは、会社・お店としての売り（実績・年数・商品・サービス・立地・評判・技術など）。代表個人の経歴や人柄は入れない。',
-    '7. メールアドレス・パスワード・ID・トークンなどの認証情報は、絶対に書かない。',
-    '8. 音声認識の誤りが疑われる固有名詞・電話番号・住所・数字は、そのまま入れたうえで、confirm_points に「何を確認すべきか」を1行で書く。',
-    '9. 選択式の項目は、示された選択肢のどれかにする。言及が無ければ空文字にする。',
-    '',
-    '# 出力',
-    '指定されたJSONスキーマに従い、すべての項目を出力する（言及が無い項目は空文字）。',
-  ].join('\n');
-
-  const aiActive = () => $('aiEnabled').checked;
-  // claude.ai 上で開いたときだけ使える「Claude内蔵」(sample)。APIキー不要で、開いている人のClaude利用枠で動く
-  let claudeSample = null;
-  const aiViaClaude = () => !!claudeSample && $('aiMode').value === 'claude';
-  const AI_SAMPLE_MAX_BYTES = 240000;   // 入力の上限(256KiB)に余裕を持たせる
-
-  function setAiStatus(kind, msg) {
-    const box = $('aiStatus');
-    if (!msg) { box.classList.add('hidden'); box.textContent = ''; return; }
-    box.className = 'alert alert-' + kind;
-    box.style.margin = '12px 0 0';
-    box.textContent = msg;
-  }
-
-  function updateAiLabels() {
-    const on = aiActive();
-    $('analyzeLabel').textContent = on ? (aiViaClaude() ? 'Claudeで読み取って発注書に反映' : 'AIで読み取って発注書に反映') : '自動解析して発注書に反映';
-    $('aiApiBox').classList.toggle('hidden', aiViaClaude());
-    $('aiPill').textContent = on ? 'オン' : 'オフ';
-    $('aiPill').className = 'pill ' + (on ? 'pill-brand' : 'pill-muted');
-  }
-
-  // 現在の商材の項目を、AIに渡す形にする（認証情報の欄は含めない）
-  function aiFieldSpecs() {
-    const specs = [{ id: 'client', desc: '顧客名（会社名・店名・屋号）。「株式会社」などを含む正式な表記' }];
-    const add = (it) => {
-      if (it.text !== undefined || AI_SKIP_IDS.has(it.id)) return;
-      let desc = AI_NOTES[it.id] || [nestLabel(it), it.hint].filter(Boolean).join('。');
-      if (AI_MARK_IDS.has(it.id)) desc = `${nestLabel(it)}: ${AI_MARK_NOTE}`;
-      specs.push({ id: it.id, desc, opts: it.type === 'choice' ? it.opts : null });
-    };
-    if (isNest()) {
-      NEST_SECTIONS.forEach(sec => sec.items.forEach(add));
-    } else {
-      FIELDS.forEach(f => add({ ...f, type: 'area' }));
-      if (isRaqmo()) PROMO_SECTIONS.forEach(sec => sec.items.forEach(add));
-    }
-    return specs;
-  }
-
-  function buildAiSchema(specs) {
-    const properties = {};
-    for (const sp of specs) {
-      properties[sp.id] = sp.opts
-        ? { type: 'string', enum: [...sp.opts, ''], description: sp.desc }
-        : { type: 'string', description: sp.desc };
-    }
-    properties.confirm_points = { type: 'string', description: '音声認識の誤りが疑われる点や、営業があとで確認すべき点（1行に1件。無ければ空文字）' };
-    return { type: 'object', properties, required: Object.keys(properties), additionalProperties: false };
-  }
-
-  // 話者の役割つきの文字起こし
-  function aiTranscriptText(list = utterances) {
-    return list.map(u => {
-      const role = roleOf(u.speaker);
-      const tag = role === 'sales' ? '営業' : role === 'customer' ? 'お客様' : '発言';
-      return `[${tag}]${u.speaker ? ' ' + u.speaker : ''}: ${u.text}`;
-    }).join('\n');
-  }
-
-  function buildAiUserMessage(transcript, part) {
-    const product = isNest() ? 'nest' : isRaqmo() ? 'RAQMO（制作発注）' : 'その他の制作発注';
-    const sales = $('sales').value.trim();
-    const client = $('client').value.trim();
-    const head = [`商材: ${product}`, sales ? `担当営業: ${sales}` : '', client ? `顧客名（入力済み）: ${client}` : ''].filter(Boolean).join('\n');
-    const partNote = part && part.n > 1 ? `\n※長いため全体を${part.n}分割しています。これは ${part.i}/${part.n} 番目です。この部分から分かることだけを記入し、言及が無い項目は空文字にしてください（ほかの部分は別に読み取ります）。\n` : '';
-    return `${head}${partNote}\n\n# 文字起こし（[営業]=KIZUNA側、[お客様]=発注する顧客側）\n${transcript}`;
-  }
-
-  async function callAnthropic({ key, model, user, schema }) {
-    const send = async (withFallback) => {
-      const headers = {
-        'content-type': 'application/json',
-        'x-api-key': key,
-        'anthropic-version': AI_API_VERSION,
-        'anthropic-dangerous-direct-browser-access': 'true',   // ブラウザから直接呼ぶために必要
-      };
-      const body = {
-        model,
-        max_tokens: 16000,
-        system: AI_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: user }],
-        output_config: { effort: 'high', format: { type: 'json_schema', schema } },
-      };
-      if (withFallback) { headers['anthropic-beta'] = AI_FALLBACK_BETA; body.fallbacks = 'default'; }
-      const ctl = new AbortController();
-      const timer = setTimeout(() => ctl.abort(), AI_TIMEOUT_MS);
-      try {
-        const res = await fetch(AI_ENDPOINT, { method: 'POST', headers, body: JSON.stringify(body), signal: ctl.signal });
-        let json = null;
-        try { json = await res.json(); } catch { /* JSONでない応答 */ }
-        return { res, json };
-      } finally {
-        clearTimeout(timer);
-      }
-    };
-    const useFallback = model !== AI_NO_FALLBACK_MODEL;
-    let r = await send(useFallback);
-    // フォールバック指定が通らない場合は、外して1回だけやり直す（400は課金されない）
-    if (useFallback && r.res.status === 400) r = await send(false);
-    return r;
-  }
-
-  // Claude内蔵用: システムプロンプト・項目の定義・出力形式を1つの文章にまとめる（sampleは指示を入力に含める）
-  function buildSamplePrompt(user, specs) {
-    const fields = specs.map(sp => `- ${sp.id}: ${sp.desc}${sp.opts ? `（選択肢: ${sp.opts.join(' / ')} / 空文字）` : ''}`).join('\n');
-    return [
-      AI_SYSTEM_PROMPT, '',
-      '# 項目の定義（キー: 書き方）', fields,
-      '- confirm_points: 音声認識の誤りが疑われる点や、営業があとで確認すべき点（1行に1件。無ければ空文字）', '',
-      '# 出力形式',
-      '上のキーをすべて含む、1つのJSONオブジェクトだけを出力する（説明文やコードブロックは付けない）。値はすべて文字列。言及が無い項目は空文字。', '',
-      user,
-    ].join('\n');
-  }
-  const SAMPLE_ERRORS = {
-    not_granted: 'Claudeの利用が許可されていません。ページを開き直して、許可の確認で「許可」を選んでください。',
-    sampling_disabled: 'このアカウント・組織では、ページからのClaude利用が使えません。',
-    rate_limited: 'リクエストが多すぎる、または利用枠の上限に達しました。少し待ってから、もう一度お試しください。',
-    session_expired: 'ログインの有効期限が切れました。claude.ai を開き直してください。',
-    prompt_too_large: '文字起こしが長すぎます。前半と後半に分けて解析してください。',
-    refused: 'Claudeがこの内容の読み取りを断りました。',
-    invalid_json: 'Claudeの応答を読み取れませんでした。もう一度お試しください。',
-    empty_completion: 'Claudeから回答が返りませんでした。もう一度お試しください。',
-    upstream_error: 'Claude側で一時的なエラーが起きました。少し待ってから、もう一度お試しください。',
-  };
-
-  const byteLen = (t) => new TextEncoder().encode(t).length;
-  const MANUAL_MAX_BYTES = 120000;   // コピー&貼り付けで、チャットに貼りやすい長さの目安
-
-  // 長いときは、発言の区切りで2つに分ける（それでも収まらなければ、さらに半分に分ける）
-  function splitUtterances(list, fits, depth = 0) {
-    if (fits(list) || list.length < 2 || depth >= 4) return [list];
-    const total = list.reduce((a, u) => a + u.text.length, 0);
-    let acc = 0, at = 1;
-    for (let i = 0; i < list.length - 1; i++) { acc += list[i].text.length; at = i + 1; if (acc >= total / 2) break; }
-    return [...splitUtterances(list.slice(0, at), fits, depth + 1), ...splitUtterances(list.slice(at), fits, depth + 1)];
-  }
-
-  function makeParts(specs, maxBytes) {
-    const fits = (l) => byteLen(buildSamplePrompt(buildAiUserMessage(aiTranscriptText(l)), specs)) <= maxBytes;
-    const groups = splitUtterances(utterances, fits);
-    const n = groups.length;
-    return groups.map((g, k) => ({ i: k + 1, n, list: g, prompt: buildSamplePrompt(buildAiUserMessage(aiTranscriptText(g), { i: k + 1, n }), specs) }));
-  }
-
-  // 分けて読み取った結果を、1つにまとめる（選択式・顧客名は最初の値、文章は重複を除いて改行でつなぐ）
-  function mergeAiResults(results, specs) {
-    const out = {};
-    const optsOf = new Map(specs.map(sp => [sp.id, sp.opts]));
-    const keys = new Set(['confirm_points']);
-    results.forEach(r => Object.keys(r || {}).forEach(k => keys.add(k)));
-    for (const k of keys) {
-      const vals = [];
-      for (const r of results) {
-        const v = r && typeof r[k] === 'string' ? r[k].trim() : '';
-        if (v && !vals.includes(v)) vals.push(v);
-      }
-      out[k] = (k === 'client' || optsOf.get(k)) ? (vals[0] || '') : vals.join('\n');
-    }
-    return out;
-  }
-
-  const confirmLines = (obj) => String(obj.confirm_points || '').split('\n').map(x => x.trim()).filter(Boolean);
-
-  async function runClaudeAnalyze(sig) {
-    const specs = aiFieldSpecs();
-    const parts = makeParts(specs, AI_SAMPLE_MAX_BYTES);
-    if (parts.some(pt => byteLen(pt.prompt) > AI_SAMPLE_MAX_BYTES)) {
-      setAiStatus('danger', '1つの発言が長すぎて、分けられませんでした。文字起こしを確認してください。規則ベースの解析結果は反映済みです。');
-      return;
-    }
-    aiBusy = true;
-    $('btnAnalyze').disabled = true;
-    try {
-      const results = [];
-      for (const pt of parts) {
-        setAiStatus('info', (pt.n > 1 ? `長いため${pt.n}つに分けて読み取ります（${pt.i}/${pt.n}）。` : '') + 'Claudeが会話の流れを読み取っています…（初回は許可の確認が出ます。数十秒かかることがあります）');
-        const obj = await claudeSample.json(pt.prompt, { modelTier: 'complex' });
-        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw { code: 'invalid_json' };
-        results.push(obj);
-      }
-      const merged = mergeAiResults(results, specs);
-      const n = applyAiResult(merged, specs);
-      aiLastKey = sig;
-      reviewed = true;
-      refreshAll();
-      const confirms = confirmLines(merged);
-      const lines = [`Claudeが ${n} 項目を反映しました。内容を必ず目視で確認してください。` + (parts.length > 1 ? `（${parts.length}つに分けて読み取りました）` : '')];
-      if (confirms.length) lines.push('Claudeからの確認事項:', ...confirms.map(c => '・' + c));
-      setAiStatus('ok', lines.join('\n'));
-      toast(`Claudeが${n}項目を反映しました。内容を確認してください`);
-    } catch (e) {
-      if (e && e.code === 'cancelled') { setAiStatus('', ''); return; }
-      const msg = (e && SAMPLE_ERRORS[e.code]) || 'Claudeの呼び出しに失敗しました。';
-      setAiStatus('danger', `${msg}\n規則ベースの解析結果は、そのまま残しています。`);
-    } finally {
-      aiBusy = false;
-      $('btnAnalyze').disabled = false;
-    }
-  }
-
-  // ---- APIキーなし: 指示をコピー → 自分のClaudeに貼る → 返ったJSONを貼り戻す ----
-  let manualParts = [];     // 分けた指示（長いとき）
-  let manualResults = [];   // 貼り戻した結果（分けたぶんをまとめて反映する）
-
-  function renderManualParts() {
-    const box = $('manualParts');
-    box.innerHTML = '';
-    if (manualParts.length < 2) { box.classList.add('hidden'); return; }
-    box.classList.remove('hidden');
-    const msg = document.createElement('div');
-    msg.className = 'hint';
-    msg.textContent = `長いため、${manualParts.length}つに分けました。1つずつ、Claudeに貼って送り、返ってきたJSONを貼り戻して「発注書に反映」を押してください（全部でまとめて反映されます）。`;
-    box.appendChild(msg);
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;margin-top:6px';
-    manualParts.forEach((pt, k) => {
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'btn btn-sm';
-      b.textContent = `指示 ${pt.i}/${pt.n} をコピー`;
-      b.addEventListener('click', async () => {
-        const ok = await copyText(pt.prompt);
-        toast(ok ? `指示 ${pt.i}/${pt.n} をコピーしました` : 'コピーできませんでした', ok);
-      });
-      row.appendChild(b);
-    });
-    box.appendChild(row);
-  }
-
-  async function copyManualPrompt() {
-    if (!$('transcript').value.trim()) { toast('文字起こしが空です', false); return; }
-    if (!runClean()) return;
-    const specs = aiFieldSpecs();
-    manualParts = makeParts(specs, MANUAL_MAX_BYTES);
-    manualResults = [];
-    renderManualParts();
-    const ok = await copyText(manualParts[0].prompt);
-    const multi = manualParts.length > 1;
-    toast(ok ? (multi ? `長いため${manualParts.length}つに分けました。1つ目の指示をコピーしました` : '指示をコピーしました。Claudeのチャットに貼り付けて送ってください') : 'コピーできませんでした。ブラウザの設定を確認してください', ok);
-    if (ok) { $('aiSettings').open = true; $('manualJson').focus(); }
-  }
-
-  // Claudeの返答から、JSONオブジェクトを取り出す（コードブロックや前後の説明文があってもよい）
-  function parseJsonLoose(text) {
-    const t = String(text || '').trim();
-    const cands = [t];
-    const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fence) cands.push(fence[1]);
-    const a = t.indexOf('{'), b = t.lastIndexOf('}');
-    if (a >= 0 && b > a) cands.push(t.slice(a, b + 1));
-    for (const c of cands) {
-      try { const v = JSON.parse(c); if (v && typeof v === 'object' && !Array.isArray(v)) return v; } catch { /* 次の候補へ */ }
-    }
-    return null;
-  }
-
-  function importManualJson() {
-    const obj = parseJsonLoose($('manualJson').value);
-    if (!obj) { setAiStatus('danger', '貼り付けた内容から、JSONを読み取れませんでした。Claudeの返答の { から } までを、そのまま貼り付けてください。'); return; }
-    if (!utterances.length) { loadUtterances(); guessRoles(utterances); }
-    const specs = aiFieldSpecs();
-    manualResults.push(obj);
-    const merged = mergeAiResults(manualResults, specs);
-    const n = applyAiResult(merged, specs);
-    reviewed = true;
-    refreshAll();
-    const total = manualParts.length, got = manualResults.length;
-    const lines = [n ? `貼り付けた結果から ${n} 項目を反映しました。内容を必ず目視で確認してください。` : '反映できる項目がありませんでした。商材の選択と、Claudeに貼った指示が今の商材のものか確認してください。'];
-    if (total > 1) {
-      lines.push(got < total ? `${total}つに分けたうちの ${got} つ目まで反映済みです。続けて、残りの指示をClaudeに送り、返ってきたJSONを貼り戻してください。` : `${total}つすべてを反映しました。`);
-      $('manualJson').value = '';
-    }
-    const confirms = confirmLines(merged);
-    if (confirms.length) lines.push('Claudeからの確認事項:', ...confirms.map(c => '・' + c));
-    setAiStatus(n ? 'ok' : 'danger', lines.join('\n'));
-    toast(n ? `${n}項目を反映しました。内容を確認してください` : '反映できる項目がありません', n > 0);
-  }
-
-  const AI_HINTS = {
-    400: 'リクエストが受け付けられませんでした。',
-    401: 'APIキーが無効です。キーを確認してください。',
-    403: 'このAPIキーでは利用できません（権限や組織の設定を確認してください）。',
-    404: '指定したモデルが見つかりません（モデルの利用権限を確認してください）。',
-    413: 'リクエストが大きすぎます。文字起こしを分けてください。',
-    429: 'リクエストが多すぎます。少し待ってから、もう一度お試しください。',
-  };
-  function aiErrorText(res, json) {
-    const detail = json && json.error && json.error.message ? `\n詳細: ${json.error.message}` : '';
-    const hint = AI_HINTS[res.status] || (res.status >= 500 ? 'Anthropic側が混み合っています。少し待ってから、もう一度お試しください。' : 'AIの呼び出しに失敗しました。');
-    return `AIの解析に失敗しました（HTTP ${res.status}）。${hint}${detail}`;
-  }
-
-  // AIの結果を欄に反映する。手入力済みの欄・起動時のURL・認証情報の欄・選択肢にない値は反映しない
-  function applyAiResult(obj, specs) {
-    const specMap = new Map(specs.map(sp => [sp.id, sp]));
-    let n = 0;
-    for (const [id, raw] of Object.entries(obj || {})) {
-      const sp = specMap.get(id);
-      if (!sp || typeof raw !== 'string' || AI_SKIP_IDS.has(id)) continue;
-      const v = raw.trim();
-      if (!v) continue;
-      if (sp.opts && !sp.opts.includes(v)) continue;
-      if (id === 'client') {
-        const input = $('client');
-        if (!input.value.trim() || !$('clientAuto').classList.contains('hidden')) {
-          input.value = v;
-          $('clientAuto').textContent = 'AI抽出・要目視確認';
-          $('clientAuto').classList.remove('hidden');
-          n++;
-        }
-        continue;
-      }
-      if (filled(id) && !autoFilled.has(id) && !defaultIds.has(id)) continue;   // 手入力済み
-      if (lockedIds.has(id) && filled(id)) continue;                              // 起動時に貼ったURLを優先
-      values[id] = v;
-      autoFilled.add(id);
-      aiFilled.add(id);
-      if (els[id]) { els[id].ta.value = v; autosize(els[id].ta); }
-      n++;
-    }
-    return n;
-  }
-
-  async function runAiAnalyze() {
-    if (aiBusy) return;
-    if (aiViaClaude()) {
-      if (!utterances.length) return;
-      const t = aiTranscriptText();
-      const s = ['claude', $('product').value, t].join('\u0000');
-      if (s === aiLastKey) { setAiStatus('info', 'この内容は、すでにClaudeで読み取り済みです（同じ内容は再送しません）。内容を変えると、もう一度読み取ります。'); return; }
-      return runClaudeAnalyze(s);
-    }
-    const key = $('aiKey').value.trim();
-    if (!key) {
-      $('aiSettings').open = true;
-      setAiStatus('danger', 'AI解析がオンですが、Anthropic APIキーが未入力です。左カラム「2. AI解析の設定」で入力してください。規則ベースの解析結果は反映済みです。');
-      return;
-    }
-    if (!utterances.length) return;
-    const transcript = aiTranscriptText();
-    const model = $('aiModel').value;
-    const sig = [$('product').value, model, transcript].join('\u0000');
-    if (sig === aiLastKey) {
-      setAiStatus('info', 'この内容は、すでにAIで読み取り済みです（同じ内容は再送しません）。内容を変えるか、話者の役割を変えると、もう一度読み取ります。');
-      return;
-    }
-    aiBusy = true;
-    $('btnAnalyze').disabled = true;
-    setAiStatus('info', 'AIが会話の流れを読み取っています…（数十秒かかることがあります）');
-    try {
-      const specs = aiFieldSpecs();
-      const groups = splitUtterances(utterances, l => aiTranscriptText(l).length <= AI_MAX_CHARS);
-      const results = [];
-      let inTok = 0, outTok = 0, usedModel = model;
-      for (let k = 0; k < groups.length; k++) {
-        if (groups.length > 1) setAiStatus('info', `長いため${groups.length}つに分けて読み取ります（${k + 1}/${groups.length}）…`);
-        const user = buildAiUserMessage(aiTranscriptText(groups[k]), { i: k + 1, n: groups.length });
-        const { res, json } = await callAnthropic({ key, model, user, schema: buildAiSchema(specs) });
-        if (!res.ok) { setAiStatus('danger', aiErrorText(res, json) + '\n規則ベースの解析結果は、そのまま残しています。'); return; }
-        if (json.stop_reason === 'refusal') {
-          setAiStatus('danger', 'AIがこの内容の読み取りを断りました。規則ベースの解析結果は、そのまま残しています。');
-          return;
-        }
-        const text = (json.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
-        let part;
-        try {
-          part = JSON.parse(text);
-        } catch {
-          setAiStatus('danger', json.stop_reason === 'max_tokens'
-            ? 'AIの出力が長すぎて途中で切れました。文字起こしを分けて、もう一度お試しください。規則ベースの解析結果は、そのまま残しています。'
-            : 'AIの応答を読み取れませんでした。もう一度お試しください。規則ベースの解析結果は、そのまま残しています。');
-          return;
-        }
-        results.push(part);
-        const u0 = json.usage || {};
-        inTok += Number(u0.input_tokens || 0); outTok += Number(u0.output_tokens || 0);
-        if (json.model) usedModel = json.model;
-      }
-      const obj = mergeAiResults(results, specs);
-      const n = applyAiResult(obj, specs);
-      aiLastKey = sig;
-      reviewed = true;
-      refreshAll();
-      const confirms = confirmLines(obj);
-      const lines = [`AIが ${n} 項目を反映しました。内容を必ず目視で確認してください。` + (groups.length > 1 ? `（${groups.length}つに分けて読み取りました）` : '')];
-      if (inTok) lines.push(`使用したトークン: 入力 ${inTok.toLocaleString()} ／ 出力 ${outTok.toLocaleString()}（モデル: ${usedModel}）`);
-      if (confirms.length) lines.push('AIからの確認事項:', ...confirms.map(c => '・' + c));
-      setAiStatus('ok', lines.join('\n'));
-      toast(`AIが${n}項目を反映しました。内容を確認してください`);
-    } catch (err) {
-      setAiStatus('danger',
-        'AIと通信できませんでした。\n' +
-        '・インターネット接続とAPIキーを確認してください。\n' +
-        '・社内のネットワーク設定で api.anthropic.com への接続が制限されている場合があります。\n' +
-        '規則ベースの解析結果は、そのまま残しています。\n詳細: ' + (err && err.message ? err.message : err));
-    } finally {
-      aiBusy = false;
-      $('btnAnalyze').disabled = false;
-    }
-  }
-
-  const AI_LS = { aiEnabled: 'aiEnabled', aiKey: 'aiKey', aiModel: 'aiModel' };
-  function initAiSettings() {
-    const sel = $('aiModel');
-    for (const [v, t] of AI_MODELS) {
-      const op = document.createElement('option');
-      op.value = v;
-      op.textContent = t;
-      sel.appendChild(op);
-    }
-    const savedModel = lsGet(AI_LS.aiModel);
-    sel.value = AI_MODELS.some(m => m[0] === savedModel) ? savedModel : AI_MODELS[0][0];
-    const savedKey = lsGet(AI_LS.aiKey);
-    if (savedKey) { $('aiKey').value = savedKey; $('aiRemember').checked = true; }
-    $('aiEnabled').checked = lsGet(AI_LS.aiEnabled) === '1';
-    const saveKey = () => { if ($('aiRemember').checked) lsSet(AI_LS.aiKey, $('aiKey').value.trim()); else lsDel(AI_LS.aiKey); };
-    $('aiKey').addEventListener('input', saveKey);
-    $('aiRemember').addEventListener('change', saveKey);
-    $('aiModel').addEventListener('change', () => lsSet(AI_LS.aiModel, $('aiModel').value));
-    $('aiEnabled').addEventListener('change', () => {
-      lsSet(AI_LS.aiEnabled, aiActive() ? '1' : '0');
-      updateAiLabels();
-      if (aiActive() && !aiViaClaude() && !$('aiKey').value.trim()) $('aiSettings').open = true;
-    });
-    $('btnClearAiKey').addEventListener('click', () => {
-      lsDel(AI_LS.aiKey); $('aiKey').value = ''; $('aiRemember').checked = false;
-      toast('保存済みのAPIキーを削除しました');
-    });
-    $('btnCopyPrompt').addEventListener('click', copyManualPrompt);
-    $('btnManualAi').addEventListener('click', copyManualPrompt);
-    $('btnImportJson').addEventListener('click', importManualJson);
-    $('aiMode').addEventListener('change', () => { lsSet('aiMode', $('aiMode').value); updateAiLabels(); });
-    updateAiLabels();
-    detectClaudeSample();
-  }
-
-  // claude.ai 上のページなら、Claude内蔵（APIキー不要）を使えるようにする。それ以外（GitHub Pages等）では何も変わらない
-  async function detectClaudeSample() {
-    try {
-      if (!window.claude || typeof window.claude.use !== 'function') return;
-      const smp = await window.claude.use('sample');
-      if (!smp || typeof smp.json !== 'function') return;
-      claudeSample = smp;
-      $('aiModeRow').classList.remove('hidden');
-      const savedMode = lsGet('aiMode');
-      $('aiMode').value = savedMode === 'api' ? 'api' : 'claude';
-      // 保存した設定が無いときは、Claude内蔵を初期値でオンにする（実行時に許可の確認が出る）
-      if (lsGet(AI_LS.aiEnabled) === null || lsGet(AI_LS.aiEnabled) === undefined || lsGet(AI_LS.aiEnabled) === '') $('aiEnabled').checked = true;
-      updateAiLabels();
-    } catch { /* 使えない環境では何もしない */ }
-  }
-
   /* ---------- 入力ハンドラ ---------- */
   // 入力欄のテキストから話者つきの発言を作る（整形済みで未変更なら前回の話者情報を再利用）
   function loadUtterances() {
@@ -2122,7 +1516,6 @@
     reviewed = true;
     refreshAll();
     toast(n ? `${n}項目を自動抽出しました。内容を確認してください` : '抽出できた項目がありません。手動で入力してください', n > 0);
-    if (aiActive()) runAiAnalyze();   // 規則ベースの結果を先に反映し、続けてAIで読み取る
   }
 
   async function loadFile(file) {
@@ -2317,64 +1710,13 @@
       st.textContent = '取得しました。最初の候補を使います。違うお店なら、店名を直して再取得してください。';
       renderGbpPreview();
     } catch (err) {
-      st.textContent = 'Googleと通信できませんでした。インターネット接続を確認してください（claude.ai上のArtifactなど、外部通信が制限される画面では使えません）。貼り付けでの入力は使えます。';
+      st.textContent = 'Googleと通信できませんでした。インターネット接続を確認してください。貼り付けでの入力は使えます。';
     } finally {
       $('btnPlaces').disabled = false;
     }
   }
 
-  // ---- キーなし: Claudeに調べてもらう（指示をコピー → 自分のClaudeに貼る → 返ったJSONを貼り戻す）----
-  function researchPrompt() {
-    const gbpUrl = startUrls.find(r => r.cat === 'gbp');
-    const name = $('placesName').value.trim() || gbpInfo().name;
-    if (!name && !gbpUrl) return '';
-    return [
-      '次のお店について、Googleマップや、お店の公式サイトなど信頼できる情報源をWeb検索で調べて、住所・電話番号・営業時間を教えてください。',
-      '',
-      name ? `店名: ${name}` : '',
-      gbpUrl ? `GoogleマップのURL: ${gbpUrl.url}` : '',
-      '',
-      '# 守ること',
-      '- 確認できた事実だけを書く。確認できない項目や、同名の別のお店かもしれない場合は、推測せず空文字にする。',
-      '- zip は「〒000-0000」の形。addr は都道府県から（郵便番号と「日本、」は含めない）。tel は「075-000-0000」の形。',
-      '- hours は、曜日ごとの営業時間（定休日を含む）を「 / 」でつなぐ。例: 月曜日: 10:00〜19:00 / 火曜日: 定休日',
-      '- source には、参照したページのURLを書く。',
-      '',
-      '# 出力形式',
-      '次のキーをすべて含む、JSONオブジェクトだけを出力する（説明文は付けない）。',
-      '{"name": "", "zip": "", "addr": "", "tel": "", "hours": "", "source": ""}',
-    ].filter(l => l !== undefined).join('\n').replace(/\n{3,}/g, '\n\n');
-  }
-
-  async function copyResearchPrompt() {
-    const t = researchPrompt();
-    const st = $('researchStatus');
-    if (!t) { st.textContent = '店名を入力するか、GoogleマップのURLを貼ってください。'; return; }
-    const ok = await copyText(t);
-    st.textContent = ok ? '指示をコピーしました。お使いのClaudeのチャットに貼り付けて送り、返ってきたJSONを下に貼ってください。' : 'コピーできませんでした。ブラウザの設定を確認してください。';
-    if (ok) $('researchJson').focus();
-  }
-
-  function importResearch() {
-    const st = $('researchStatus');
-    const obj = parseJsonLoose($('researchJson').value);
-    if (!obj) { st.textContent = '貼り付けた内容から、JSONを読み取れませんでした。Claudeの返答の { から } までを、そのまま貼り付けてください。'; return; }
-    const str = (k) => (typeof obj[k] === 'string' ? obj[k].trim() : '');
-    let addr = str('addr').replace(/^日本[、,]\s*/, '');
-    let zip = str('zip');
-    const z = (zip + ' ' + addr).match(/〒?\s*(\d{3})[-ー−‐－]?(\d{4})/);
-    zip = z ? '〒' + z[1] + '-' + z[2] : '';
-    addr = addr.replace(/〒?\s*\d{3}[-ー−‐－]?\d{4}\s*/, '').trim();
-    const tel = (str('tel').match(/0\d{1,4}[-ー−‐－]\d{1,4}[-ー−‐－]\d{3,4}/) || [''])[0].replace(/[ー−‐－]/g, '-');
-    const info = { name: str('name'), zip, addr, tel, hours: str('hours') };
-    if (!info.name && !info.addr && !info.tel && !info.hours) { st.textContent = '取り込める情報がありませんでした（Claudeが確認できなかった可能性があります）。店名を確認して、もう一度調べてください。'; return; }
-    placesFetched = info;
-    const src = str('source');
-    st.textContent = 'Claudeの調査結果を取り込みました。内容は必ず目視で確認してください（同名の別のお店・古い情報の可能性があります）。' + (src ? ` 参照元: ${src}` : '');
-    renderGbpPreview();
-  }
-
-  // 起動画面の情報を、いまの内容に合わせてまとめる（貼り付けた情報 > 取得・調査の結果 > URLの店名）
+  // 起動画面の情報を、いまの内容に合わせてまとめる（貼り付けた情報 > Googleから取得 > URLの店名）
   function gbpInfo() {
     const text = parseGbpText(startGbpText);
     const f = placesFetched || {};
@@ -2487,8 +1829,6 @@
     $('placesKey').addEventListener('input', savePk);
     $('placesRemember').addEventListener('change', savePk);
     $('btnPlaces').addEventListener('click', lookupPlaces);
-    $('btnResearchCopy').addEventListener('click', copyResearchPrompt);
-    $('btnResearchImport').addEventListener('click', importResearch);
     $('startGbp').addEventListener('input', () => { startGbpText = $('startGbp').value; renderGbpPreview(); });
     document.querySelectorAll('#startScreen [data-product]').forEach(b => {
       b.addEventListener('click', () => chooseProduct(b.dataset.product));
@@ -2534,7 +1874,6 @@
     renderAll();
     setupDnD();
     initHubSpotSettings();
-    initAiSettings();
     refreshAll();
 
     $('product').addEventListener('change', () => { renderAll(); applyStartUrls(); refreshAll(); });
