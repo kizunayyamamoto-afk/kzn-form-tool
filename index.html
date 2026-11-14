@@ -274,6 +274,7 @@
         <h2 class="card-title">Zoomの商談内容</h2>
       </div>
       <div class="card-body">
+        <button id="btnZraLatest" type="button" class="btn btn-primary btn-block" style="margin-bottom:10px">Zoomの最新の商談の要約を取り込む</button>
         <details id="zraBox" class="zra-box" style="margin-bottom:12px">
           <summary style="cursor:pointer;font-weight:600">Zoom Revenue Acceleratorから自動で取得<span id="zraPill" class="pill pill-muted" style="margin-left:6px">未設定</span></summary>
           <p class="hint" style="margin:8px 0">Zoom Revenue Acceleratorで作られたAIの要約を、中継サーバー経由で取り込みます。中継サーバーの作り方は、リポジトリの relay/zoom-ra/README.md を見てください。設定したあとは、商談を選ぶだけです。</p>
@@ -1617,6 +1618,7 @@
     $('zraRemember').addEventListener('change', save);
     $('zraAuto').addEventListener('change', () => lsSet(ZRA_LS.auto, $('zraAuto').checked ? '1' : '0'));
     $('btnZraList').addEventListener('click', () => zraLoadList(false));
+    $('btnZraLatest').addEventListener('click', () => zraLoadList(true));   // 押したら、直近の商談の要約を取りに行って解析する
     $('btnZraImport').addEventListener('click', () => { const id = $('zraList').value; const it = zraItems.find(c => c.id === id); if (id) zraImport(id, it && it.title); });
     save();
   }
