@@ -244,6 +244,36 @@
         <textarea id="srcNote" rows="5" class="control" placeholder="例）&#10;強み: 京都で30年続く手作りの洋菓子&#10;Instagram: https://www.instagram.com/…&#10;サイト: https://…"></textarea>
         <div id="srcPreview" class="hint" style="margin-top:6px"></div>
       </details>
+        <details id="gdBox" style="margin-top:10px">
+          <summary style="cursor:pointer;font-weight:600">Googleカレンダー・ドライブから案件の商談ノートを取得<span id="gdPill" class="pill pill-muted" style="margin-left:6px">未ログイン</span></summary>
+          <p class="hint" style="margin:8px 0">Googleカレンダーの予定から案件を選び、その案件の商談ノート(Googleドキュメント)をGoogleドライブから探して取り込みます。取り込んだあと、下の商材を選ぶと、発注書の欄に反映します。Googleにログインして読み取るだけで、書き込み・削除はしません。サーバーは要りません。準備のしかたは、READMEの「Googleカレンダー・ドライブの連携」を見てください。</p>
+          <label for="gdClientId" class="label">GoogleのOAuthクライアントID</label>
+          <input id="gdClientId" type="text" autocomplete="off" class="control" style="margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px" placeholder="123456789-xxxx.apps.googleusercontent.com">
+          <label class="check-row" style="margin-top:6px"><input id="gdRemember" type="checkbox">クライアントIDを、このブラウザのLocalStorageに保存する</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+            <button id="btnGdEvents" type="button" class="btn btn-sm btn-primary">ログインして予定を取得</button>
+          </div>
+          <div id="gdEventWrap" class="hidden" style="margin-top:8px">
+            <label for="gdCal" class="label">カレンダー（営業ごとの共有カレンダーなど）</label>
+            <select id="gdCal" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
+            <label for="gdFilter" class="label" style="margin-top:8px;display:block">予定の絞り込み（顧客名・担当名など）</label>
+            <input id="gdFilter" type="text" class="control" style="margin-top:4px" placeholder="入力すると、下の一覧が絞られます">
+            <label for="gdEvents" class="label" style="margin-top:8px;display:block">案件（カレンダーの予定）</label>
+            <select id="gdEvents" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
+            <label for="gdQuery" class="label" style="margin-top:8px;display:block">ノートの検索語（顧客名など。直してもよい）</label>
+            <input id="gdQuery" type="text" class="control" style="margin-top:4px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+              <button id="btnGdDocs" type="button" class="btn btn-sm btn-primary">商談ノートを探す</button>
+              <button id="btnGdEventOnly" type="button" class="btn btn-sm">予定だけ取り込む</button>
+            </div>
+          </div>
+          <div id="gdDocWrap" class="hidden" style="margin-top:8px">
+            <label for="gdDocs" class="label">商談ノート（Googleドライブ）</label>
+            <select id="gdDocs" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
+            <button id="btnGdImport" type="button" class="btn btn-sm btn-primary" style="margin-top:8px">この商談ノートを取り込む</button>
+          </div>
+          <div id="gdStatus" class="hint" style="margin-top:6px" role="status"></div>
+        </details>
     </div>
 
     <div class="start-block">
@@ -290,36 +320,6 @@
             <button id="btnZraImport" type="button" class="btn btn-sm hidden">この商談の要約を取り込む</button>
           </div>
           <div id="zraStatus" class="hint" style="margin-top:6px" role="status"></div>
-        </details>
-        <details id="gdBox" class="zra-box" style="margin-bottom:12px">
-          <summary style="cursor:pointer;font-weight:600">Googleカレンダー・ドライブから案件の商談ノートを取得<span id="gdPill" class="pill pill-muted" style="margin-left:6px">未ログイン</span></summary>
-          <p class="hint" style="margin:8px 0">Googleカレンダーの予定から案件を選び、その案件の商談ノート(Googleドキュメント)をGoogleドライブから探して、発注書の欄に取り込みます。Googleにログインして読み取るだけで、書き込み・削除はしません。サーバーは要りません。準備のしかたは、READMEの「Googleカレンダー・ドライブの連携」を見てください。</p>
-          <label for="gdClientId" class="label">GoogleのOAuthクライアントID</label>
-          <input id="gdClientId" type="text" autocomplete="off" class="control" style="margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px" placeholder="123456789-xxxx.apps.googleusercontent.com">
-          <label class="check-row" style="margin-top:6px"><input id="gdRemember" type="checkbox">クライアントIDを、このブラウザのLocalStorageに保存する</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
-            <button id="btnGdEvents" type="button" class="btn btn-sm btn-primary">ログインして予定を取得</button>
-          </div>
-          <div id="gdEventWrap" class="hidden" style="margin-top:8px">
-            <label for="gdCal" class="label">カレンダー（営業ごとの共有カレンダーなど）</label>
-            <select id="gdCal" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
-            <label for="gdFilter" class="label" style="margin-top:8px;display:block">予定の絞り込み（顧客名・担当名など）</label>
-            <input id="gdFilter" type="text" class="control" style="margin-top:4px" placeholder="入力すると、下の一覧が絞られます">
-            <label for="gdEvents" class="label" style="margin-top:8px;display:block">案件（カレンダーの予定）</label>
-            <select id="gdEvents" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
-            <label for="gdQuery" class="label" style="margin-top:8px;display:block">ノートの検索語（顧客名など。直してもよい）</label>
-            <input id="gdQuery" type="text" class="control" style="margin-top:4px">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-              <button id="btnGdDocs" type="button" class="btn btn-sm btn-primary">商談ノートを探す</button>
-              <button id="btnGdEventOnly" type="button" class="btn btn-sm">予定だけ取り込む</button>
-            </div>
-          </div>
-          <div id="gdDocWrap" class="hidden" style="margin-top:8px">
-            <label for="gdDocs" class="label">商談ノート（Googleドライブ）</label>
-            <select id="gdDocs" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
-            <button id="btnGdImport" type="button" class="btn btn-sm btn-primary" style="margin-top:8px">この商談ノートを取り込む</button>
-          </div>
-          <div id="gdStatus" class="hint" style="margin-top:6px" role="status"></div>
         </details>
         <p class="hint" style="margin-bottom:10px">テキストを貼り付けるか、.vtt / .txt ファイルをここにドラッグ＆ドロップしてください。貼り付け・読み込みと同時に自動で解析して、右の発注書プレビューを埋めます。</p>
         <div id="dropzone" class="dropzone">
@@ -1824,6 +1824,13 @@
     const e = gdCurrentEvent();
     srcCalText = e ? [e.summary, gdPlain(e.description)].filter(Boolean).join('\n') : '';
     srcNoteText = noteText || '';
+    if ($('startScreen')) {   // 商材を選ぶ前: 「案件の資料の取り込み」の欄に入れ、商材を選んだときに欄へ反映する
+      $('srcCal').value = srcCalText;
+      $('srcNote').value = srcNoteText;
+      renderSrcPreview();
+      $('srcBox').open = true;
+      return -1;
+    }
     const n = applySourceInfo();
     applyStartUrls();
     reviewed = true;
@@ -1840,8 +1847,8 @@
       const text = (await gdGet(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}/export?mimeType=text%2Fplain`, true)).replace(/^\ufeff/, '');
       if (!text.trim()) { gdSay('商談ノートの本文が空でした。'); return; }
       const n = gdApply(text);
-      gdSay(`商談ノートと予定から${n}項目を反映しました。内容を必ず確認してください。`);
-      toast(`商談ノートから${n}項目を反映しました。内容を確認してください`, n > 0);
+      if (n < 0) { gdSay('商談ノートと予定を取り込みました（「案件の資料の取り込み」の欄に入っています）。下の商材を選ぶと、発注書の欄に反映します。'); toast('取り込みました。商材を選んでください'); }
+      else { gdSay(`商談ノートと予定から${n}項目を反映しました。内容を必ず確認してください。`); toast(`商談ノートから${n}項目を反映しました。内容を確認してください`, n > 0); }
     } catch (e) {
       gdSay(e.message);
     } finally {
@@ -1867,6 +1874,7 @@
     $('btnGdImport').addEventListener('click', gdImportDoc);
     $('btnGdEventOnly').addEventListener('click', () => {
       const n = gdApply('');
+      if (n < 0) { gdSay('予定を取り込みました。下の商材を選ぶと、発注書の欄に反映します。'); toast('取り込みました。商材を選んでください'); return; }
       gdSay(`予定から${n}項目を反映しました。`);
       toast(n ? `予定から${n}項目を反映しました。内容を確認してください` : '予定から反映できる項目がありませんでした', n > 0);
     });
