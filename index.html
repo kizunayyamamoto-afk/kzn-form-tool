@@ -291,6 +291,32 @@
           </div>
           <div id="zraStatus" class="hint" style="margin-top:6px" role="status"></div>
         </details>
+        <details id="gdBox" class="zra-box" style="margin-bottom:12px">
+          <summary style="cursor:pointer;font-weight:600">Googleカレンダー・ドライブから案件の商談ノートを取得<span id="gdPill" class="pill pill-muted" style="margin-left:6px">未ログイン</span></summary>
+          <p class="hint" style="margin:8px 0">Googleカレンダーの予定から案件を選び、その案件の商談ノート(Googleドキュメント)をGoogleドライブから探して、発注書の欄に取り込みます。Googleにログインして読み取るだけで、書き込み・削除はしません。サーバーは要りません。準備のしかたは、READMEの「Googleカレンダー・ドライブの連携」を見てください。</p>
+          <label for="gdClientId" class="label">GoogleのOAuthクライアントID</label>
+          <input id="gdClientId" type="text" autocomplete="off" class="control" style="margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px" placeholder="123456789-xxxx.apps.googleusercontent.com">
+          <label class="check-row" style="margin-top:6px"><input id="gdRemember" type="checkbox">クライアントIDを、このブラウザのLocalStorageに保存する</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+            <button id="btnGdEvents" type="button" class="btn btn-sm btn-primary">ログインして予定を取得</button>
+          </div>
+          <div id="gdEventWrap" class="hidden" style="margin-top:8px">
+            <label for="gdEvents" class="label">案件（カレンダーの予定）</label>
+            <select id="gdEvents" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
+            <label for="gdQuery" class="label" style="margin-top:8px;display:block">ノートの検索語（顧客名など。直してもよい）</label>
+            <input id="gdQuery" type="text" class="control" style="margin-top:4px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+              <button id="btnGdDocs" type="button" class="btn btn-sm btn-primary">商談ノートを探す</button>
+              <button id="btnGdEventOnly" type="button" class="btn btn-sm">予定だけ取り込む</button>
+            </div>
+          </div>
+          <div id="gdDocWrap" class="hidden" style="margin-top:8px">
+            <label for="gdDocs" class="label">商談ノート（Googleドライブ）</label>
+            <select id="gdDocs" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
+            <button id="btnGdImport" type="button" class="btn btn-sm btn-primary" style="margin-top:8px">この商談ノートを取り込む</button>
+          </div>
+          <div id="gdStatus" class="hint" style="margin-top:6px" role="status"></div>
+        </details>
         <p class="hint" style="margin-bottom:10px">テキストを貼り付けるか、.vtt / .txt ファイルをここにドラッグ＆ドロップしてください。貼り付け・読み込みと同時に自動で解析して、右の発注書プレビューを埋めます。</p>
         <div id="dropzone" class="dropzone">
           <textarea id="transcript" rows="12" placeholder="ここに文字起こし（またはZoomの要約）を貼り付け、または .vtt / .txt をドロップ" class="control control-plain"></textarea>
@@ -1623,6 +1649,188 @@
     save();
   }
 
+  /* ---------- Googleカレンダー・ドライブから、案件の商談ノートを取得 ---------- */
+  // 利用者がGoogleにログイン(読み取りだけの権限)し、予定から案件を選ぶと、その案件の商談ノートをドライブから探して取り込む。
+  // Googleへ送るのは、ログインのトークンと、検索語(顧客名など)・日付の範囲・ファイルIDだけ。発注書の内容は送らない。サーバーは使わない
+  const GD_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/drive.readonly';
+  const GD_GSI_URL = 'https://accounts.google.com/gsi/client';
+  const GD_LS = 'gdClientId';
+  let gdToken = '';
+  let gdEvents = [];
+  const gdSay = (msg) => { $('gdStatus').textContent = msg; };
+
+  // Googleのログイン用スクリプトは、ログインを押したときに初めて読み込む（それまでGoogleへは何も送らない）
+  function gdLoadGsi() {
+    return new Promise((resolve, reject) => {
+      if (window.google && window.google.accounts && window.google.accounts.oauth2) { resolve(); return; }
+      const sc = document.createElement('script');
+      sc.src = GD_GSI_URL;
+      sc.async = true;
+      sc.onload = () => resolve();
+      sc.onerror = () => reject(new Error('Googleのログイン用スクリプトを読み込めませんでした。インターネット接続を確認してください。'));
+      document.head.appendChild(sc);
+    });
+  }
+
+  async function gdLogin() {
+    const clientId = $('gdClientId').value.trim();
+    if (!clientId) { gdSay('GoogleのOAuthクライアントIDを入力してください。'); $('gdBox').open = true; return false; }
+    if (gdToken) return true;
+    try { await gdLoadGsi(); } catch (e) { gdSay(e.message); return false; }
+    return new Promise((resolve) => {
+      const fail = (why) => { gdSay('Googleにログインできませんでした。' + (why ? `（${why}）` : '') + 'クライアントIDと、承認済みのJavaScript生成元（このページのURL）の設定を確認してください。'); resolve(false); };
+      const client = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: GD_SCOPE,
+        callback: (r) => { if (r && r.access_token) { gdToken = r.access_token; $('gdPill').textContent = 'ログイン済み'; $('gdPill').className = 'pill pill-brand'; resolve(true); } else fail(r && r.error); },
+        error_callback: (e) => fail(e && e.type),
+      });
+      client.requestAccessToken();
+    });
+  }
+
+  async function gdGet(url, asText = false) {
+    let res;
+    try { res = await fetch(url, { headers: { authorization: 'Bearer ' + gdToken } }); }
+    catch { throw new Error('Googleに接続できませんでした。インターネット接続を確認してください。'); }
+    if (res.status === 401) { gdToken = ''; $('gdPill').textContent = '未ログイン'; $('gdPill').className = 'pill pill-muted'; throw new Error('ログインの有効期限が切れました。もう一度「ログインして予定を取得」を押してください。'); }
+    if (!res.ok) {
+      const hint = res.status === 403 ? 'Google CloudでCalendar APIとDrive APIが有効か、承認した権限を確認してください。' : '';
+      throw new Error(`Googleから取得できませんでした（HTTP ${res.status}）。${hint}`);
+    }
+    return asText ? res.text() : res.json();
+  }
+
+  // カレンダーの説明欄はHTMLのことがある。読み込みを起こさないDOMParserで、文章だけにする
+  function gdPlain(html) {
+    if (!html) return '';
+    const withBreaks = String(html).replace(/<\s*br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h[1-6])>/gi, '\n');
+    const doc = new DOMParser().parseFromString(withBreaks, 'text/html');
+    return (doc.body.textContent || '').replace(/\u00a0/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  }
+  const gdEsc = (t) => String(t).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const gdWhen = (e) => { const t = (e.start && (e.start.dateTime || e.start.date)) || ''; return t ? t.slice(0, 16).replace('T', ' ') : ''; };
+
+  async function gdLoadEvents() {
+    if (!(await gdLogin())) return;
+    gdSay('予定を取得しています…');
+    $('btnGdEvents').disabled = true;
+    try {
+      const now = Date.now();
+      const q = new URLSearchParams({
+        timeMin: new Date(now - 7 * 86400000).toISOString(), timeMax: new Date(now + 14 * 86400000).toISOString(),
+        singleEvents: 'true', orderBy: 'startTime', maxResults: '50',
+      });
+      const data = await gdGet('https://www.googleapis.com/calendar/v3/calendars/primary/events?' + q);
+      gdEvents = (data.items || []).filter(e => e.summary && e.status !== 'cancelled');
+      const sel = $('gdEvents');
+      sel.textContent = '';
+      let nearest = 0, best = Infinity;
+      gdEvents.forEach((e, i) => {
+        const op = document.createElement('option');
+        op.value = String(i);
+        op.textContent = `${gdWhen(e)}  ${e.summary}`;
+        sel.appendChild(op);
+        const d = Math.abs((Date.parse((e.start && (e.start.dateTime || e.start.date)) || '') || now) - now);
+        if (d < best) { best = d; nearest = i; }
+      });
+      $('gdEventWrap').classList.toggle('hidden', !gdEvents.length);
+      if (!gdEvents.length) { gdSay('前後の期間に、予定が見つかりませんでした。'); return; }
+      sel.value = String(nearest);
+      gdSyncQuery();
+      gdSay(`${gdEvents.length}件の予定が見つかりました。案件を選んで「商談ノートを探す」を押してください（いちばん近い予定を選んでいます）。`);
+    } catch (e) {
+      gdSay(e.message);
+    } finally {
+      $('btnGdEvents').disabled = false;
+    }
+  }
+
+  const gdCurrentEvent = () => gdEvents[Number($('gdEvents').value)] || null;
+  function gdSyncQuery() {
+    const e = gdCurrentEvent();
+    $('gdQuery').value = e ? (calendarClient(e.summary) || e.summary.replace(/[【\[][^】\]]*[】\]]/g, '').trim()) : '';
+    $('gdDocWrap').classList.add('hidden');
+  }
+
+  async function gdFindDocs() {
+    const query = $('gdQuery').value.trim();
+    if (!query) { gdSay('検索語（顧客名など）を入力してください。'); return; }
+    if (!(await gdLogin())) return;
+    gdSay('ドライブで商談ノートを探しています…');
+    $('btnGdDocs').disabled = true;
+    try {
+      const k = gdEsc(query);
+      const q = new URLSearchParams({
+        q: `mimeType='application/vnd.google-apps.document' and trashed=false and (name contains '${k}' or fullText contains '${k}')`,
+        fields: 'files(id,name,modifiedTime)', orderBy: 'modifiedTime desc', pageSize: '20',
+      });
+      const data = await gdGet('https://www.googleapis.com/drive/v3/files?' + q);
+      const files = (data.files || []).slice().sort((a, b) => (/(商談|ノート)/.test(b.name) - /(商談|ノート)/.test(a.name)));   // 名前に「商談」「ノート」があるものを先に（更新の新しい順は保つ）
+      const sel = $('gdDocs');
+      sel.textContent = '';
+      files.forEach(f => {
+        const op = document.createElement('option');
+        op.value = f.id;
+        op.textContent = `${(f.modifiedTime || '').slice(0, 10)}  ${f.name}`;
+        sel.appendChild(op);
+      });
+      $('gdDocWrap').classList.toggle('hidden', !files.length);
+      gdSay(files.length ? `${files.length}件のドキュメントが見つかりました。商談ノートを選んで、取り込んでください。` : `「${query}」を含むドキュメントが、ドライブに見つかりませんでした。検索語を変えるか、「予定だけ取り込む」を使ってください。`);
+    } catch (e) {
+      gdSay(e.message);
+    } finally {
+      $('btnGdDocs').disabled = false;
+    }
+  }
+
+  // 取り込み: 予定(タイトル・説明)と商談ノートの本文を、資料の取り込みと同じルールで、いまの商材の欄に入れる
+  function gdApply(noteText) {
+    const e = gdCurrentEvent();
+    srcCalText = e ? [e.summary, gdPlain(e.description)].filter(Boolean).join('\n') : '';
+    srcNoteText = noteText || '';
+    const n = applySourceInfo();
+    applyStartUrls();
+    reviewed = true;
+    refreshAll();
+    return n;
+  }
+
+  async function gdImportDoc() {
+    const id = $('gdDocs').value;
+    if (!id) return;
+    gdSay('商談ノートを取り込んでいます…');
+    $('btnGdImport').disabled = true;
+    try {
+      const text = (await gdGet(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}/export?mimeType=text%2Fplain`, true)).replace(/^\ufeff/, '');
+      if (!text.trim()) { gdSay('商談ノートの本文が空でした。'); return; }
+      const n = gdApply(text);
+      gdSay(`商談ノートと予定から${n}項目を反映しました。内容を必ず確認してください。`);
+      toast(`商談ノートから${n}項目を反映しました。内容を確認してください`, n > 0);
+    } catch (e) {
+      gdSay(e.message);
+    } finally {
+      $('btnGdImport').disabled = false;
+    }
+  }
+
+  function initGd() {
+    const saved = lsGet(GD_LS);
+    if (saved) { $('gdClientId').value = saved; $('gdRemember').checked = true; }
+    const save = () => { if ($('gdRemember').checked) lsSet(GD_LS, $('gdClientId').value.trim()); else lsDel(GD_LS); };
+    $('gdClientId').addEventListener('input', save);
+    $('gdRemember').addEventListener('change', save);
+    $('btnGdEvents').addEventListener('click', gdLoadEvents);
+    $('gdEvents').addEventListener('change', gdSyncQuery);
+    $('btnGdDocs').addEventListener('click', gdFindDocs);
+    $('btnGdImport').addEventListener('click', gdImportDoc);
+    $('btnGdEventOnly').addEventListener('click', () => {
+      const n = gdApply('');
+      gdSay(`予定から${n}項目を反映しました。`);
+      toast(n ? `予定から${n}項目を反映しました。内容を確認してください` : '予定から反映できる項目がありませんでした', n > 0);
+    });
+  }
+
   /* ---------- 入力ハンドラ ---------- */
   // 入力欄のテキストから話者つきの発言を作る（整形済みで未変更なら前回の話者情報を再利用）
   function loadUtterances() {
@@ -2126,6 +2334,7 @@
     setupDnD();
     initHubSpotSettings();
     initZra();
+    initGd();
     refreshAll();
 
     $('product').addEventListener('change', () => { renderAll(); applyStartUrls(); refreshAll(); });
