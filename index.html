@@ -244,6 +244,36 @@
         <textarea id="srcNote" rows="5" class="control" placeholder="例）&#10;強み: 京都で30年続く手作りの洋菓子&#10;Instagram: https://www.instagram.com/…&#10;サイト: https://…"></textarea>
         <div id="srcPreview" class="hint" style="margin-top:6px"></div>
       </details>
+        <details id="gdBox" style="margin-top:10px">
+          <summary style="cursor:pointer;font-weight:600">Googleカレンダー・ドライブから案件の商談ノートを取得<span id="gdPill" class="pill pill-muted" style="margin-left:6px">未ログイン</span></summary>
+          <p class="hint" style="margin:8px 0">Googleカレンダーの予定から案件を選び、その案件の商談ノート(Googleドキュメント)をGoogleドライブから探して取り込みます。取り込んだあと、下の商材を選ぶと、発注書の欄に反映します。Googleにログインして読み取るだけで、書き込み・削除はしません。サーバーは要りません。準備のしかたは、READMEの「Googleカレンダー・ドライブの連携」を見てください。</p>
+          <label for="gdClientId" class="label">GoogleのOAuthクライアントID</label>
+          <input id="gdClientId" type="text" autocomplete="off" class="control" style="margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px" placeholder="123456789-xxxx.apps.googleusercontent.com">
+          <label class="check-row" style="margin-top:6px"><input id="gdRemember" type="checkbox">クライアントIDを、このブラウザのLocalStorageに保存する</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+            <button id="btnGdEvents" type="button" class="btn btn-sm btn-primary">ログインして予定を取得</button>
+          </div>
+          <div id="gdEventWrap" class="hidden" style="margin-top:8px">
+            <label for="gdCal" class="label">カレンダー（営業ごとの共有カレンダーなど）</label>
+            <select id="gdCal" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
+            <label for="gdFilter" class="label" style="margin-top:8px;display:block">予定の絞り込み（顧客名・担当名など）</label>
+            <input id="gdFilter" type="text" class="control" style="margin-top:4px" placeholder="入力すると、下の一覧が絞られます">
+            <label for="gdEvents" class="label" style="margin-top:8px;display:block">案件（カレンダーの予定）</label>
+            <select id="gdEvents" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
+            <label for="gdQuery" class="label" style="margin-top:8px;display:block">ノートの検索語（顧客名など。直してもよい）</label>
+            <input id="gdQuery" type="text" class="control" style="margin-top:4px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+              <button id="btnGdDocs" type="button" class="btn btn-sm btn-primary">商談ノートを探す</button>
+              <button id="btnGdEventOnly" type="button" class="btn btn-sm">予定だけ取り込む</button>
+            </div>
+          </div>
+          <div id="gdDocWrap" class="hidden" style="margin-top:8px">
+            <label for="gdDocs" class="label">商談ノート（Googleドライブ）</label>
+            <select id="gdDocs" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
+            <button id="btnGdImport" type="button" class="btn btn-sm btn-primary" style="margin-top:8px">この商談ノートを取り込む</button>
+          </div>
+          <div id="gdStatus" class="hint" style="margin-top:6px" role="status"></div>
+        </details>
     </div>
 
     <div class="start-block">
@@ -290,32 +320,6 @@
             <button id="btnZraImport" type="button" class="btn btn-sm hidden">この商談の要約を取り込む</button>
           </div>
           <div id="zraStatus" class="hint" style="margin-top:6px" role="status"></div>
-        </details>
-        <details id="gdBox" class="zra-box" style="margin-bottom:12px">
-          <summary style="cursor:pointer;font-weight:600">Googleカレンダー・ドライブから案件の商談ノートを取得<span id="gdPill" class="pill pill-muted" style="margin-left:6px">未ログイン</span></summary>
-          <p class="hint" style="margin:8px 0">Googleカレンダーの予定から案件を選び、その案件の商談ノート(Googleドキュメント)をGoogleドライブから探して、発注書の欄に取り込みます。Googleにログインして読み取るだけで、書き込み・削除はしません。サーバーは要りません。準備のしかたは、READMEの「Googleカレンダー・ドライブの連携」を見てください。</p>
-          <label for="gdClientId" class="label">GoogleのOAuthクライアントID</label>
-          <input id="gdClientId" type="text" autocomplete="off" class="control" style="margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px" placeholder="123456789-xxxx.apps.googleusercontent.com">
-          <label class="check-row" style="margin-top:6px"><input id="gdRemember" type="checkbox">クライアントIDを、このブラウザのLocalStorageに保存する</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
-            <button id="btnGdEvents" type="button" class="btn btn-sm btn-primary">ログインして予定を取得</button>
-          </div>
-          <div id="gdEventWrap" class="hidden" style="margin-top:8px">
-            <label for="gdEvents" class="label">案件（カレンダーの予定）</label>
-            <select id="gdEvents" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
-            <label for="gdQuery" class="label" style="margin-top:8px;display:block">ノートの検索語（顧客名など。直してもよい）</label>
-            <input id="gdQuery" type="text" class="control" style="margin-top:4px">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-              <button id="btnGdDocs" type="button" class="btn btn-sm btn-primary">商談ノートを探す</button>
-              <button id="btnGdEventOnly" type="button" class="btn btn-sm">予定だけ取り込む</button>
-            </div>
-          </div>
-          <div id="gdDocWrap" class="hidden" style="margin-top:8px">
-            <label for="gdDocs" class="label">商談ノート（Googleドライブ）</label>
-            <select id="gdDocs" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
-            <button id="btnGdImport" type="button" class="btn btn-sm btn-primary" style="margin-top:8px">この商談ノートを取り込む</button>
-          </div>
-          <div id="gdStatus" class="hint" style="margin-top:6px" role="status"></div>
         </details>
         <p class="hint" style="margin-bottom:10px">テキストを貼り付けるか、.vtt / .txt ファイルをここにドラッグ＆ドロップしてください。貼り付け・読み込みと同時に自動で解析して、右の発注書プレビューを埋めます。</p>
         <div id="dropzone" class="dropzone">
@@ -1711,34 +1715,64 @@
   const gdEsc = (t) => String(t).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
   const gdWhen = (e) => { const t = (e.start && (e.start.dateTime || e.start.date)) || ''; return t ? t.slice(0, 16).replace('T', ' ') : ''; };
 
+  const GD_CAL_LS = 'gdCalendarId';
+  async function gdLoadCalendars() {
+    const data = await gdGet('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader&maxResults=100');
+    const items = (data.items || []).filter(c => c.id && !/#holiday@/.test(c.id));
+    const sel = $('gdCal');
+    sel.textContent = '';
+    items.forEach(c => {
+      const op = document.createElement('option');
+      op.value = c.id;
+      op.textContent = (c.summaryOverride || c.summary || c.id) + (c.primary ? '（自分）' : '');
+      sel.appendChild(op);
+    });
+    const saved = lsGet(GD_CAL_LS);
+    const primary = items.find(c => c.primary);
+    sel.value = items.some(c => c.id === saved) ? saved : (primary ? primary.id : (items[0] ? items[0].id : ''));
+  }
+
+  async function gdLoadEventsOf(calendarId) {
+    const now = Date.now();
+    const q = new URLSearchParams({
+      timeMin: new Date(now - 7 * 86400000).toISOString(), timeMax: new Date(now + 14 * 86400000).toISOString(),
+      singleEvents: 'true', orderBy: 'startTime', maxResults: '100',
+    });
+    const data = await gdGet(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?` + q);
+    gdEvents = (data.items || []).filter(e => e.summary && e.status !== 'cancelled');
+    gdRenderEvents();
+  }
+
+  // 絞り込みに合う予定だけを一覧にする。いちばん近い予定を選ぶ
+  function gdRenderEvents() {
+    const kw = $('gdFilter').value.trim().toLowerCase();
+    const sel = $('gdEvents');
+    sel.textContent = '';
+    const now = Date.now();
+    let nearest = '', best = Infinity;
+    gdEvents.forEach((e, i) => {
+      if (kw && !(`${e.summary} ${e.description || ''}`.toLowerCase().includes(kw))) return;
+      const op = document.createElement('option');
+      op.value = String(i);
+      op.textContent = `${gdWhen(e)}  ${e.summary}`;
+      sel.appendChild(op);
+      const d = Math.abs((Date.parse((e.start && (e.start.dateTime || e.start.date)) || '') || now) - now);
+      if (d < best) { best = d; nearest = String(i); }
+    });
+    if (nearest) sel.value = nearest;
+    gdSyncQuery();
+    const shown = sel.options.length;
+    gdSay(shown ? `${shown}件の予定があります。案件を選んで「商談ノートを探す」を押してください（いちばん近い予定を選んでいます）。` : '該当する予定がありません。カレンダーや絞り込みを変えてください。');
+  }
+
   async function gdLoadEvents() {
     if (!(await gdLogin())) return;
     gdSay('予定を取得しています…');
     $('btnGdEvents').disabled = true;
     try {
-      const now = Date.now();
-      const q = new URLSearchParams({
-        timeMin: new Date(now - 7 * 86400000).toISOString(), timeMax: new Date(now + 14 * 86400000).toISOString(),
-        singleEvents: 'true', orderBy: 'startTime', maxResults: '50',
-      });
-      const data = await gdGet('https://www.googleapis.com/calendar/v3/calendars/primary/events?' + q);
-      gdEvents = (data.items || []).filter(e => e.summary && e.status !== 'cancelled');
-      const sel = $('gdEvents');
-      sel.textContent = '';
-      let nearest = 0, best = Infinity;
-      gdEvents.forEach((e, i) => {
-        const op = document.createElement('option');
-        op.value = String(i);
-        op.textContent = `${gdWhen(e)}  ${e.summary}`;
-        sel.appendChild(op);
-        const d = Math.abs((Date.parse((e.start && (e.start.dateTime || e.start.date)) || '') || now) - now);
-        if (d < best) { best = d; nearest = i; }
-      });
-      $('gdEventWrap').classList.toggle('hidden', !gdEvents.length);
-      if (!gdEvents.length) { gdSay('前後の期間に、予定が見つかりませんでした。'); return; }
-      sel.value = String(nearest);
-      gdSyncQuery();
-      gdSay(`${gdEvents.length}件の予定が見つかりました。案件を選んで「商談ノートを探す」を押してください（いちばん近い予定を選んでいます）。`);
+      if (!$('gdCal').options.length) await gdLoadCalendars();
+      $('gdEventWrap').classList.remove('hidden');
+      await gdLoadEventsOf($('gdCal').value || 'primary');
     } catch (e) {
       gdSay(e.message);
     } finally {
@@ -1749,7 +1783,8 @@
   const gdCurrentEvent = () => gdEvents[Number($('gdEvents').value)] || null;
   function gdSyncQuery() {
     const e = gdCurrentEvent();
-    $('gdQuery').value = e ? (calendarClient(e.summary) || e.summary.replace(/[【\[][^】\]]*[】\]]/g, '').trim()) : '';
+    const name = e ? (calendarClient(e.summary) || e.summary.replace(/[【\[][^】\]]*[】\]]/g, '').trim()) : '';
+    $('gdQuery').value = name.replace(/^(?:株式会社|有限会社|合同会社)[ 　]*|[ 　]*(?:株式会社|有限会社|合同会社)$/g, '');   // 書類の題名は「○○様」と書かれることが多いので、法人格を除いて探す
     $('gdDocWrap').classList.add('hidden');
   }
 
@@ -1789,6 +1824,13 @@
     const e = gdCurrentEvent();
     srcCalText = e ? [e.summary, gdPlain(e.description)].filter(Boolean).join('\n') : '';
     srcNoteText = noteText || '';
+    if ($('startScreen')) {   // 商材を選ぶ前: 「案件の資料の取り込み」の欄に入れ、商材を選んだときに欄へ反映する
+      $('srcCal').value = srcCalText;
+      $('srcNote').value = srcNoteText;
+      renderSrcPreview();
+      $('srcBox').open = true;
+      return -1;
+    }
     const n = applySourceInfo();
     applyStartUrls();
     reviewed = true;
@@ -1805,8 +1847,8 @@
       const text = (await gdGet(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}/export?mimeType=text%2Fplain`, true)).replace(/^\ufeff/, '');
       if (!text.trim()) { gdSay('商談ノートの本文が空でした。'); return; }
       const n = gdApply(text);
-      gdSay(`商談ノートと予定から${n}項目を反映しました。内容を必ず確認してください。`);
-      toast(`商談ノートから${n}項目を反映しました。内容を確認してください`, n > 0);
+      if (n < 0) { gdSay('商談ノートと予定を取り込みました（「案件の資料の取り込み」の欄に入っています）。下の商材を選ぶと、発注書の欄に反映します。'); toast('取り込みました。商材を選んでください'); }
+      else { gdSay(`商談ノートと予定から${n}項目を反映しました。内容を必ず確認してください。`); toast(`商談ノートから${n}項目を反映しました。内容を確認してください`, n > 0); }
     } catch (e) {
       gdSay(e.message);
     } finally {
@@ -1822,10 +1864,17 @@
     $('gdRemember').addEventListener('change', save);
     $('btnGdEvents').addEventListener('click', gdLoadEvents);
     $('gdEvents').addEventListener('change', gdSyncQuery);
+    $('gdFilter').addEventListener('input', gdRenderEvents);
+    $('gdCal').addEventListener('change', async () => {
+      lsSet(GD_CAL_LS, $('gdCal').value);
+      gdSay('予定を取得しています…');
+      try { await gdLoadEventsOf($('gdCal').value); } catch (e) { gdSay(e.message); }
+    });
     $('btnGdDocs').addEventListener('click', gdFindDocs);
     $('btnGdImport').addEventListener('click', gdImportDoc);
     $('btnGdEventOnly').addEventListener('click', () => {
       const n = gdApply('');
+      if (n < 0) { gdSay('予定を取り込みました。下の商材を選ぶと、発注書の欄に反映します。'); toast('取り込みました。商材を選んでください'); return; }
       gdSay(`予定から${n}項目を反映しました。`);
       toast(n ? `予定から${n}項目を反映しました。内容を確認してください` : '予定から反映できる項目がありませんでした', n > 0);
     });
@@ -2049,14 +2098,21 @@
     ['zip',       /^(?:郵便番号|〒)$/],
     ['hours',     /^(?:営業時間)$/],
     ['site',      /^(?:サイト(?:URL)?|ホームページ|HP|WEB(?:サイト)?|既存サイト|URL)$/i],
-    ['ig',        /^(?:Instagram|インスタ(?:グラム)?|IG)$/i],
+    ['ig',        /^(?:Instagram(?:の運用状況)?|インスタ(?:グラム)?(?:の運用状況)?|IG)$/i],
     ['x',         /^(?:X|Twitter|ツイッター|エックス)$/i],
     ['fb',        /^(?:Facebook|フェイスブック|FB)$/i],
     ['gbp',       /^(?:GBP|Googleビジネス(?:プロフィール)?|Googleマップ|グーグルマップ)$/i],
+    ['gbp_owner', /^(?:Googleマップ|GBP|Googleビジネス(?:プロフィール)?)の?(?:自社)?管理状況$/i],
+    ['etc',       /^(?:その他情報|その他|備考|事前ヒアリング)$/],
   ];
-  const srcKeyOf = (label) => { const l = String(label).replace(/[\s　*_`]/g, ''); const hit = SRC_LABELS.find(([, re]) => re.test(l)); return hit ? hit[0] : ''; };
+  // 「⑤ Googleマップ（GBP）の自社管理状況」→「Googleマップの自社管理状況」（番号・かっこの中を除く）
+  const srcNormLabel = (label) => String(label).replace(/[（(][^）)]*[）)]/g, '').replace(/[\s　*_`①-⑩❶-❿]/g, '');
+  const SRC_IGNORE_LABEL_RE = /^(?:代表(?:名|アポ)?|Mail|メール|同席|携帯|アポ|確アポ|リサーチ|時間認識|料金認識|Zoom|ZOOM|検索キーワード|店舗数|年齢|性別|HubSpot|HS|ホームページの有無|担当|発注日|アシスタント|ドメイン)/i;
+  const srcKeyOf = (label) => { const l = srcNormLabel(label); const hit = SRC_LABELS.find(([, re]) => re.test(l)); return hit ? hit[0] : ''; };
   const SRC_BULLET_RE = /^[\s　・･●○◎■□◆◇▶▷▼▽►\-–—•*#＞>※]+/;
-  const SRC_SKIP_URL_RE = /(zoom\.us|meet\.google\.com|calendar\.google\.com|teams\.microsoft\.com)/i;
+  const SRC_SKIP_URL_RE = /(zoom\.us|meet\.google\.com|calendar\.google\.com|teams\.microsoft\.com|hubspot\.com)/i;
+  // HubSpotのリンク(…/record/0-3/数字 または …/deal/数字)から、取引IDを取り出す（0-3は取引のオブジェクト）
+  const hubspotDealId = (text) => { const m = String(text || '').match(/hubspot\.com\/[^\s"'<>]*?(?:record\/0-3|deal)\/(\d{5,})/i); return m ? m[1] : ''; };
   const SRC_NONE_RE = /^(?:なし|ない|無し|未|やっていない|持っていない|使っていない|アカウントなし)/;
 
   // 「強み: 値」「【強み】値」「■強み」の次の行、の形から項目を取り出す。ラベルの無い行は free に集める
@@ -2069,9 +2125,11 @@
       if (!raw.trim()) { cur = ''; continue; }
       const body = raw.trim().replace(SRC_BULLET_RE, '').replace(/\*\*/g, '').trim();
       if (!body || /^https?:\/\/\S+$/.test(body)) continue;   // URLだけの行は、あとでまとめて拾う
-      const m = body.match(/^[【\[](.{1,14}?)[】\]]\s*[:：]?\s*(.*)$/) || body.match(/^(.{1,14}?)\s*[:：]\s*(.*)$/);
+      const m = body.match(/^[【\[](.{1,30}?)[】\]]\s*[:：]?\s*(.*)$/) || body.match(/^(.{1,30}?)\s*[:：]\s*(.*)$/);
       const k = m && !/^https?$/i.test(m[1]) ? srcKeyOf(m[1]) : '';
       if (k) { cur = k; put(k, m[2]); continue; }
+      if (m && !/^https?$/i.test(m[1]) && SRC_IGNORE_LABEL_RE.test(srcNormLabel(m[1]))) { cur = ''; continue; }   // 代表名・メール・アポの前提条件など（発注書に不要）
+      if (/^[【\[][^】\]]*[】\]]$/.test(body)) { cur = ''; continue; }                                         // 「【確アポ情報（事前ヒアリング）】」などの見出しだけの行
       const head = srcKeyOf(body.replace(/^[【\[]|[】\]]$/g, ''));
       if (head && body.length <= 14) { cur = head; continue; }
       if (cur) put(cur, body); else free.push(body);
@@ -2081,9 +2139,30 @@
   }
 
   // カレンダーの予定のタイトルから顧客名を取り出す（「【商談】○○株式会社様 打ち合わせ」「KIZUNA × ○○様」など）
+  // 営業の予定の題名: 「◎❷担当/ZDn(AF)/有限会社○○/同席者」「担当・担当・○○株式会社様：済み」の形から、顧客名を取り出す
+  const TITLE_MARK_RE = /^[\s=＝◎◉○●※★☆▽▼❶-❿①-⑩]+/;
+  const TITLE_TAIL_RE = /\s*[：:]\s*済(?:み)?\s*$|\s*済(?:み)?\s*$/;
+  const isCodeSegment = (seg) => /^[A-Za-z0-9()（）\-_ ]{1,12}$/.test(seg);                // 「ZDn(AF)」「tZEn」「TO」
+  const isPeopleSegment = (seg) => {                                                  // 「三木・森3」「向尾・向尾2」（短い名前の並び）
+    const parts = seg.split(/[・、,，\s]+/).filter(Boolean);
+    return parts.length > 0 && parts.every(x => x.replace(/\d+$/, '').length <= 4) && (parts.length > 1 || /\d$/.test(seg));
+  };
+  function clientFromSalesTitle(raw) {
+    const t = String(raw).replace(/[【\[][^】\]]*[】\]]/g, ' ').replace(TITLE_MARK_RE, '').replace(TITLE_TAIL_RE, '').trim();
+    const segs = t.split(/\s*[\/／]\s*/).map(x => x.trim()).filter(Boolean);
+    if (segs.length >= 2) {
+      const hit = segs.slice(1).find(sg => !isCodeSegment(sg) && !isPeopleSegment(sg));
+      if (hit) return hit.replace(/\s*様$/, '').trim();
+    }
+    const m = t.match(/(?:^|[・/／\s])([^・/／\s]{2,25}?)様/);
+    return m ? m[1] : '';
+  }
+
   function calendarClient(text) {
     const title = String(text || '').split('\n').map(l => l.trim()).find(Boolean) || '';
     if (!title) return '';
+    const sales = clientFromSalesTitle(title);
+    if (sales && sales.length >= 2 && sales.length <= 30 && !EXCLUDE_CLIENT_RE.test(sales)) return sales;
     const t = title.replace(/^(?:タイトル|件名|予定)\s*[:：]\s*/, '').replace(/[【\[][^】\]]*[】\]]/g, ' ').trim();
     for (const part of t.split(/[×xX／/|｜＆&]/)) {
       if (EXCLUDE_CLIENT_RE.test(part)) continue;
@@ -2109,17 +2188,21 @@
     const fields = { ...cal.fields, ...note.fields };
     const urls = [...note.urls, ...cal.urls];
     const none = {};
+    const has = {};
     for (const kind of ['ig', 'x', 'fb']) {
       const v = (fields[kind] || '').trim();
       if (!v) continue;
-      if (SRC_NONE_RE.test(v)) none[kind] = true;
+      if (SRC_NONE_RE.test(v) || /^無/.test(v)) none[kind] = true;
+      else if (/^(?:有|あり|有り|運用)/.test(v) && !/^https?:/.test(v)) has[kind] = true;
       else { const u = snsUrlOf(kind, v); if (u) urls.push(u); }
     }
+    if (fields.gbp_owner) { const o = fields.gbp_owner.trim(); fields.gbp_owner = /^(?:自社|あり|有|自分|自前)/.test(o) ? 'あり' : /^(?:他社|なし|無|不明|代理)/.test(o) ? 'なし' : ''; }
+    const dealId = hubspotDealId(srcCalText) || hubspotDealId(srcNoteText);
     if (fields.site && /^https?:\/\//.test(fields.site)) urls.push(fields.site.split(/\s/)[0]);
     if (fields.gbp && /^https?:\/\//.test(fields.gbp)) urls.push(fields.gbp.split(/\s/)[0]);
-    const free = [note.free, cal.free].filter(Boolean).join('\n');
+    const free = [note.free, cal.free, fields.etc].filter(Boolean).join('\n');
     const client = fields.client || calendarClient(srcCalText) || '';
-    return { fields, urls: uniq(urls), none, free, client, any: !!(Object.keys(fields).length || urls.length || free || client) };
+    return { fields, urls: uniq(urls), none, has, dealId, free, client, any: !!(Object.keys(fields).length || urls.length || free || client || dealId) };
   }
 
   function renderSrcPreview() {
@@ -2129,6 +2212,7 @@
     const JA = { industry: '業種', business: '事業', strength: '強み', trouble: '困りごと', overview: '案件概要', target: 'ターゲット', tone: 'トンマナ', materials: '素材', tel: '電話', addr: '住所', zip: '郵便番号', hours: '営業時間', site: 'サイト', ig: 'Instagram', x: 'X', fb: 'Facebook', gbp: 'GBP' };
     for (const [k, v] of Object.entries(i.fields)) { if (k !== 'client') parts.push(`${JA[k] || k}=${String(v).replace(/\n/g, ' ').slice(0, 24)}`); }
     if (i.urls.length) parts.push(`URL ${i.urls.length}件`);
+    if (i.dealId) parts.push(`取引ID=${i.dealId}`);
     if (srcSummaryText.trim()) parts.push('Zoomの要約あり');
     $('srcPreview').textContent = parts.length ? '読み取り結果: ' + parts.join(' ／ ') : '';
   }
@@ -2160,12 +2244,15 @@
         store_tel: f.tel, store_addr: f.addr, store_zip: f.zip, store_hours: f.hours }).filter(([, v]) => v)));
       if (info.client) { out.shop = info.client; out.store_name = info.client; }
       for (const k of Object.keys(info.none)) out[k + '_has'] = 'なし';
+      for (const k of Object.keys(info.has)) if (!out[k + '_has']) out[k + '_has'] = 'あり';
+      if (f.gbp_owner) out.gbp_owner = f.gbp_owner;
     } else {
       Object.assign(out, Object.fromEntries(Object.entries({ overview: f.overview, business: f.business, strength: f.strength, trouble: f.trouble,
         target: f.target, tone: f.tone, materials: f.materials }).filter(([, v]) => v)));
       const store = [f.zip && f.addr ? `${f.zip} ${f.addr}` : (f.addr || f.zip), f.tel && `電話: ${f.tel}`, f.hours && `営業時間: ${f.hours}`].filter(Boolean);
       if (store.length) out.notes = '【取り込んだ資料】' + store.join(' ／ ');
       if (isRaqmo() && info.none.ig) out.mt_ig = 'なし';
+      if (isRaqmo() && info.has.ig) out.mt_ig = 'あり';
     }
     let n = 0;
     for (const [id, v] of Object.entries(out)) {
@@ -2176,6 +2263,7 @@
       if (els[id]) { els[id].ta.value = v; autosize(els[id].ta); }
       n++;
     }
+    if (info.dealId && !$('hsDealId').value.trim()) { $('hsDealId').value = info.dealId; n++; }   // 予定の説明のHubSpotリンクから、取引IDを入れる
     if (info.client && !$('client').value.trim()) {
       $('client').value = info.client;
       $('clientAuto').textContent = '資料から入力・要確認';
