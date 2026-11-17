@@ -1462,8 +1462,9 @@
     return `${step}に失敗しました（HTTP ${res.status}）。\n${HS_HINTS[res.status] || 'HubSpot側でエラーが発生しました。'}${detail}`;
   }
 
-  /* ---------- HubSpotにある情報（取引・会社・担当者・ノート）を取得して、発注書に反映 ---------- */
-  // 取引IDとトークンで、HubSpotから読み取るだけ（書き込みはしない）。取得した内容は画面に表示し、欄にも反映する（手入力欄は上書きしない）
+  /* ---------- HubSpotにある情報（取引・会社）を取得して、発注書に反映 ---------- */
+  // 取引IDとトークンで、HubSpotから読み取るだけ（書き込みはしない）。読むのは、取引と、取引に紐づく会社だけ（担当者・ノートは読まない）。
+  // 取得した内容は画面に表示し、欄にも反映する（手入力欄は上書きしない）
   let srcHsText = '';
   const hsPlain = (html) => {
     if (!html) return '';
@@ -1474,31 +1475,16 @@
 
   async function hsFetchBundle(dealId, token) {
     const enc = encodeURIComponent(dealId);
-    const d = await hsRequest(`/crm/v3/objects/deals/${enc}?properties=dealname,dealstage,pipeline,amount,closedate,description&associations=companies,contacts`, token);
+    const d = await hsRequest(`/crm/v3/objects/deals/${enc}?properties=dealname,dealstage,pipeline,amount,closedate,description&associations=companies`, token);
     if (!d.res.ok) throw new Error(hsErrorText('取引の取得', d.res, d.json));
     const assoc = (d.json && d.json.associations) || {};
-    const ids = (k) => ((assoc[k] && assoc[k].results) || []).map(r => String(r.id)).filter(Boolean);
-    const out = { deal: d.json.properties || {}, company: null, companyId: '', contacts: [], notes: [], warnings: [] };
-    const cid = ids('companies')[0];
-    if (cid) {
-      out.companyId = cid;
-      const c = await hsRequest(`/crm/v3/objects/companies/${encodeURIComponent(cid)}?properties=name,phone,address,address2,city,state,zip,domain,website,industry,description`, token);
+    const cids = ((assoc.companies && assoc.companies.results) || []).map(r => String(r.id)).filter(Boolean);
+    const out = { deal: d.json.properties || {}, company: null, companyId: '', warnings: [] };
+    if (cids[0]) {
+      out.companyId = cids[0];
+      const c = await hsRequest(`/crm/v3/objects/companies/${encodeURIComponent(cids[0])}?properties=name,phone,address,address2,city,state,zip,domain,website,industry,description`, token);
       if (c.res.ok) out.company = c.json.properties || {}; else out.warnings.push('会社の情報を取得できませんでした（権限 crm.objects.companies.read を確認）。');
     } else out.warnings.push('この取引には会社が紐づいていません。');
-    for (const id of ids('contacts').slice(0, 3)) {
-      const c = await hsRequest(`/crm/v3/objects/contacts/${encodeURIComponent(id)}?properties=firstname,lastname,phone,mobilephone,jobtitle`, token);
-      if (c.res.ok) out.contacts.push(c.json.properties || {});
-    }
-    if (ids('contacts').length && !out.contacts.length) out.warnings.push('担当者の情報を取得できませんでした（権限 crm.objects.contacts.read を確認）。');
-    // ノート（任意。権限が無くても、ほかの情報は使う）
-    try {
-      const na = await hsRequest(`/crm/v4/objects/deals/${enc}/associations/notes`, token);
-      const nids = na.res.ok ? ((na.json && na.json.results) || []).map(r => String(r.toObjectId)).slice(0, 5) : [];
-      if (nids.length) {
-        const nb = await hsRequest('/crm/v3/objects/notes/batch/read', token, { method: 'POST', body: JSON.stringify({ properties: ['hs_note_body', 'hs_timestamp'], inputs: nids.map(id => ({ id })) }) });
-        if (nb.res.ok) out.notes = ((nb.json && nb.json.results) || []).map(r => hsPlain(r.properties && r.properties.hs_note_body)).filter(Boolean);
-      } else if (!na.res.ok) out.warnings.push('ノートを取得できませんでした（ノートの読み取り権限を確認）。');
-    } catch { out.warnings.push('ノートを取得できませんでした。'); }
     return out;
   }
 
@@ -1508,7 +1494,7 @@
     const addr = [c.state, c.city, c.address, c.address2].filter(Boolean).join('');
     const site = c.website || (c.domain ? 'https://' + c.domain : '');
     const lines = [c.name && `店名: ${c.name}`, c.phone && `電話: ${c.phone}`, addr && `住所: ${addr}`, c.zip && `郵便番号: ${c.zip}`, site && `サイト: ${site}`];
-    return [...lines.filter(Boolean), ...b.notes].join('\n');
+    return [...lines.filter(Boolean), hsPlain(b.deal.description), hsPlain(c.description)].filter(Boolean).join('\n');
   }
 
   function renderHsInfo(b) {
@@ -1516,17 +1502,16 @@
     const d = b.deal;
     const rows = [
       ['取引', [d.dealname, d.dealstage && `（ステージ: ${d.dealstage}）`].filter(Boolean).join(' ')],
+      ['取引の説明', hsPlain(d.description)],
       ['会社', c.name], ['電話', c.phone], ['住所', [c.zip, c.state, c.city, c.address, c.address2].filter(Boolean).join(' ')],
       ['サイト', c.website || c.domain],
-      ['担当者', b.contacts.map(x => [x.lastname, x.firstname].filter(Boolean).join(' ') + (x.phone || x.mobilephone ? `（${x.phone || x.mobilephone}）` : '')).filter(Boolean).join(' ／ ')],
     ].filter(r => r[1]);
     const box = $('hsInfo');
     box.textContent = '';
     const title = document.createElement('b');
     title.textContent = 'HubSpotにある情報（読み取りのみ）';
     box.appendChild(title);
-    rows.forEach(([k, v]) => { const l = document.createElement('div'); l.textContent = `${k}: ${v}`; box.appendChild(l); });
-    b.notes.slice(0, 3).forEach((n, i) => { const l = document.createElement('div'); l.style.whiteSpace = 'pre-wrap'; l.textContent = `ノート${i + 1}: ${n.length > 300 ? n.slice(0, 300) + '…' : n}`; box.appendChild(l); });
+    rows.forEach(([k, v]) => { const l = document.createElement('div'); l.style.whiteSpace = 'pre-wrap'; l.textContent = `${k}: ${v.length > 300 ? v.slice(0, 300) + '…' : v}`; box.appendChild(l); });
     b.warnings.forEach(w => { const l = document.createElement('div'); l.className = 'hint'; l.textContent = '※ ' + w; box.appendChild(l); });
     box.classList.remove('hidden');
   }
