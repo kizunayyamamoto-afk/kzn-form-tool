@@ -425,6 +425,11 @@
                 <input id="hsCompanyId" type="text" inputmode="numeric" placeholder="会社ID（任意）" class="control" aria-label="HubSpot 会社ID">
               </div>
               <p class="hint" style="margin-top:6px">発注書は<b>新しいチケット</b>として作成され、ここで指定した<b>取引</b>と<b>会社</b>に紐づきます。会社IDを空にすると、取引に紐づく会社を自動で取得します。IDは、HubSpotのレコード画面のURL末尾の数字です。</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+                <button id="btnHsLoad" type="button" class="btn btn-sm">HubSpotの情報を取得して反映</button>
+                <span id="hsInfoStatus" class="hint" role="status"></span>
+              </div>
+              <div id="hsInfo" class="alert alert-info hidden" style="margin-top:8px"></div>
             </div>
           </div>
         </div>
@@ -1457,6 +1462,103 @@
     return `${step}に失敗しました（HTTP ${res.status}）。\n${HS_HINTS[res.status] || 'HubSpot側でエラーが発生しました。'}${detail}`;
   }
 
+  /* ---------- HubSpotにある情報（取引・会社・担当者・ノート）を取得して、発注書に反映 ---------- */
+  // 取引IDとトークンで、HubSpotから読み取るだけ（書き込みはしない）。取得した内容は画面に表示し、欄にも反映する（手入力欄は上書きしない）
+  let srcHsText = '';
+  const hsPlain = (html) => {
+    if (!html) return '';
+    const withBreaks = String(html).replace(/<\s*br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h[1-6])>/gi, '\n');
+    return (new DOMParser().parseFromString(withBreaks, 'text/html').body.textContent || '').replace(/\u00a0/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  };
+  const hsSay = (msg) => { $('hsInfoStatus').textContent = msg; };
+
+  async function hsFetchBundle(dealId, token) {
+    const enc = encodeURIComponent(dealId);
+    const d = await hsRequest(`/crm/v3/objects/deals/${enc}?properties=dealname,dealstage,pipeline,amount,closedate,description&associations=companies,contacts`, token);
+    if (!d.res.ok) throw new Error(hsErrorText('取引の取得', d.res, d.json));
+    const assoc = (d.json && d.json.associations) || {};
+    const ids = (k) => ((assoc[k] && assoc[k].results) || []).map(r => String(r.id)).filter(Boolean);
+    const out = { deal: d.json.properties || {}, company: null, companyId: '', contacts: [], notes: [], warnings: [] };
+    const cid = ids('companies')[0];
+    if (cid) {
+      out.companyId = cid;
+      const c = await hsRequest(`/crm/v3/objects/companies/${encodeURIComponent(cid)}?properties=name,phone,address,address2,city,state,zip,domain,website,industry,description`, token);
+      if (c.res.ok) out.company = c.json.properties || {}; else out.warnings.push('会社の情報を取得できませんでした（権限 crm.objects.companies.read を確認）。');
+    } else out.warnings.push('この取引には会社が紐づいていません。');
+    for (const id of ids('contacts').slice(0, 3)) {
+      const c = await hsRequest(`/crm/v3/objects/contacts/${encodeURIComponent(id)}?properties=firstname,lastname,phone,mobilephone,jobtitle`, token);
+      if (c.res.ok) out.contacts.push(c.json.properties || {});
+    }
+    if (ids('contacts').length && !out.contacts.length) out.warnings.push('担当者の情報を取得できませんでした（権限 crm.objects.contacts.read を確認）。');
+    // ノート（任意。権限が無くても、ほかの情報は使う）
+    try {
+      const na = await hsRequest(`/crm/v4/objects/deals/${enc}/associations/notes`, token);
+      const nids = na.res.ok ? ((na.json && na.json.results) || []).map(r => String(r.toObjectId)).slice(0, 5) : [];
+      if (nids.length) {
+        const nb = await hsRequest('/crm/v3/objects/notes/batch/read', token, { method: 'POST', body: JSON.stringify({ properties: ['hs_note_body', 'hs_timestamp'], inputs: nids.map(id => ({ id })) }) });
+        if (nb.res.ok) out.notes = ((nb.json && nb.json.results) || []).map(r => hsPlain(r.properties && r.properties.hs_note_body)).filter(Boolean);
+      } else if (!na.res.ok) out.warnings.push('ノートを取得できませんでした（ノートの読み取り権限を確認）。');
+    } catch { out.warnings.push('ノートを取得できませんでした。'); }
+    return out;
+  }
+
+  // 取得した内容を、「ラベル: 値」の文章にして、資料の取り込みと同じルールで欄に入れる
+  function hsToSourceText(b) {
+    const c = b.company || {};
+    const addr = [c.state, c.city, c.address, c.address2].filter(Boolean).join('');
+    const site = c.website || (c.domain ? 'https://' + c.domain : '');
+    const lines = [c.name && `店名: ${c.name}`, c.phone && `電話: ${c.phone}`, addr && `住所: ${addr}`, c.zip && `郵便番号: ${c.zip}`, site && `サイト: ${site}`];
+    return [...lines.filter(Boolean), ...b.notes].join('\n');
+  }
+
+  function renderHsInfo(b) {
+    const c = b.company || {};
+    const d = b.deal;
+    const rows = [
+      ['取引', [d.dealname, d.dealstage && `（ステージ: ${d.dealstage}）`].filter(Boolean).join(' ')],
+      ['会社', c.name], ['電話', c.phone], ['住所', [c.zip, c.state, c.city, c.address, c.address2].filter(Boolean).join(' ')],
+      ['サイト', c.website || c.domain],
+      ['担当者', b.contacts.map(x => [x.lastname, x.firstname].filter(Boolean).join(' ') + (x.phone || x.mobilephone ? `（${x.phone || x.mobilephone}）` : '')).filter(Boolean).join(' ／ ')],
+    ].filter(r => r[1]);
+    const box = $('hsInfo');
+    box.textContent = '';
+    const title = document.createElement('b');
+    title.textContent = 'HubSpotにある情報（読み取りのみ）';
+    box.appendChild(title);
+    rows.forEach(([k, v]) => { const l = document.createElement('div'); l.textContent = `${k}: ${v}`; box.appendChild(l); });
+    b.notes.slice(0, 3).forEach((n, i) => { const l = document.createElement('div'); l.style.whiteSpace = 'pre-wrap'; l.textContent = `ノート${i + 1}: ${n.length > 300 ? n.slice(0, 300) + '…' : n}`; box.appendChild(l); });
+    b.warnings.forEach(w => { const l = document.createElement('div'); l.className = 'hint'; l.textContent = '※ ' + w; box.appendChild(l); });
+    box.classList.remove('hidden');
+  }
+
+  async function hsLoadInfo(auto = false) {
+    const token = $('hsToken').value.trim();
+    const dealId = $('hsDealId').value.trim();
+    if (!/^\d+$/.test(dealId)) { hsSay('HubSpotの取引IDを、数字で入力してください。'); return; }
+    if (!token) { if (!auto) { $('hsSettings').open = true; hsSay('HubSpotのアクセストークンが未設定です（左カラム「2. HubSpot接続設定」）。'); } return; }
+    hsSay('HubSpotから取得しています…');
+    $('btnHsLoad').disabled = true;
+    try {
+      const b = await hsFetchBundle(dealId, token);
+      renderHsInfo(b);
+      srcHsText = hsToSourceText(b);
+      if (b.companyId && !$('hsCompanyId').value.trim()) $('hsCompanyId').value = b.companyId;
+      const n = applySourceInfo();
+      applyStartUrls();   // サイト・SNSのURLを欄へ
+      reviewed = true;
+      refreshAll();
+      hsSay(`取得しました。${n}項目を欄に反映しました。内容を確認してください。`);
+      toast(`HubSpotの情報から${n}項目を反映しました`, n > 0);
+    } catch (err) {
+      const net = !(err && err.message && /HTTP \d+/.test(err.message));
+      hsSay(net
+        ? 'HubSpotと通信できませんでした。インターネット接続を確認してください。HubSpot APIは、ブラウザからの直接呼び出し（CORS）を拒否する場合があります。詳細: ' + (err && err.message ? err.message : err)
+        : err.message);
+    } finally {
+      $('btnHsLoad').disabled = false;
+    }
+  }
+
   async function sendToHubSpot() {
     showApiError('');
     showApiResult('');
@@ -2185,8 +2287,9 @@
   function sourceInfo() {
     const note = parseSourceNotes(srcNoteText);
     const cal = parseSourceNotes(srcCalText);
-    const fields = { ...cal.fields, ...note.fields };
-    const urls = [...note.urls, ...cal.urls];
+    const hs = parseSourceNotes(srcHsText);   // HubSpotにある情報（優先度は最も低い）
+    const fields = { ...hs.fields, ...cal.fields, ...note.fields };
+    const urls = [...note.urls, ...cal.urls, ...hs.urls];
     const none = {};
     const has = {};
     for (const kind of ['ig', 'x', 'fb']) {
@@ -2200,7 +2303,7 @@
     const dealId = hubspotDealId(srcCalText) || hubspotDealId(srcNoteText);
     if (fields.site && /^https?:\/\//.test(fields.site)) urls.push(fields.site.split(/\s/)[0]);
     if (fields.gbp && /^https?:\/\//.test(fields.gbp)) urls.push(fields.gbp.split(/\s/)[0]);
-    const free = [note.free, cal.free, fields.etc].filter(Boolean).join('\n');
+    const free = [note.free, cal.free, hs.free, fields.etc].filter(Boolean).join('\n');
     const client = fields.client || calendarClient(srcCalText) || '';
     return { fields, urls: uniq(urls), none, has, dealId, free, client, any: !!(Object.keys(fields).length || urls.length || free || client || dealId) };
   }
@@ -2351,6 +2454,7 @@
     }
     refreshAll();
     $('transcript').focus();
+    if ($('hsDealId').value.trim() && $('hsToken').value.trim()) hsLoadInfo(true);   // 取引IDが入り、トークンが設定済みなら、HubSpotの情報も読み取る
     if (!srcSummaryText.trim() && $('zraAuto').checked && zraConfigured()) {   // 中継サーバーが設定済みなら、直近の商談の要約を自動で取り込む
       zraLoadList(true);
       return;
@@ -2440,6 +2544,7 @@
       toast(ok ? '発注書テキストをコピーしました' : 'コピーに失敗しました', ok);
     });
     $('btnHubSpot').addEventListener('click', sendToHubSpot);
+    $('btnHsLoad').addEventListener('click', () => hsLoadInfo(false));
     $('btnClipboard').addEventListener('click', importFromClipboard);
     // 案件を選び直す。claude.aiのArtifactでは confirm() が使えないため、確認はボタンの2度押しで行う
     let restartTimer = null;
