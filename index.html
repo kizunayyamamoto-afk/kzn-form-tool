@@ -216,7 +216,13 @@
     </div>
     <div class="start-head">
       <h2>今回の案件を選んでください</h2>
-      <p>Zoomの文字起こし（.vtt / .txt）を入れる（または貼り付ける）と、発注書の項目を自動で埋めます。</p>
+      <p>Zoom Revenue Acceleratorの要約（または文字起こし）を貼ると、発注書の項目を自動で埋めます。</p>
+    </div>
+
+    <div class="start-block">
+      <label for="srcSummary" class="label">Zoom Revenue Acceleratorの要約<span class="pill pill-muted">任意</span></label>
+      <p class="hint" style="margin-bottom:8px">Zoom Revenue Accelerator(旧 Zoom IQ)の商談の画面から、AIが作った要約をコピーして、ここに貼ってください。商材を選ぶと、そのまま解析して、発注書の欄に入れます。（要約がなければ、商材を選んだあとに、Zoomの文字起こしを貼ることもできます）</p>
+      <textarea id="srcSummary" rows="6" class="control" placeholder="Zoom Revenue Acceleratorの要約を貼り付け"></textarea>
     </div>
 
     <div class="start-block">
@@ -235,10 +241,8 @@
     <div class="start-block">
       <details id="srcBox">
         <summary style="cursor:pointer;font-weight:600">案件の資料を取り込む<span class="pill pill-muted" style="margin-left:6px">任意</span></summary>
-        <p class="hint" style="margin:8px 0">Zoomの要約、Googleカレンダーの予定、Googleドライブの商談ノートの本文を、コピーして貼ってください。商材を選ぶと、発注書の欄に反映します。ツールがこれらのサービスへ接続することはありません（貼った文章だけを、ブラウザの中で読みます）。</p>
-        <label for="srcSummary" class="label">Zoomの要約（Zoom Revenue Accelerator・AI Companionなど）</label>
-        <textarea id="srcSummary" rows="4" class="control" placeholder="要約の文章を貼り付け。商材を選ぶと、そのまま解析します"></textarea>
-        <label for="srcCal" class="label" style="margin-top:8px;display:block">Googleカレンダーの予定（タイトルと説明）</label>
+        <p class="hint" style="margin:8px 0">Googleカレンダーの予定と、Googleドライブの商談ノートの本文を、コピーして貼ってください。商材を選ぶと、発注書の欄に反映します。ツールがこれらのサービスへ接続することはありません（貼った文章だけを、ブラウザの中で読みます）。</p>
+        <label for="srcCal" class="label">Googleカレンダーの予定（タイトルと説明）</label>
         <textarea id="srcCal" rows="3" class="control" placeholder="例）&#10;【商談】○○株式会社様 ホームページ打ち合わせ&#10;（説明欄の文章）"></textarea>
         <label for="srcNote" class="label" style="margin-top:8px;display:block">商談ノート（Googleドキュメントなどの本文）</label>
         <textarea id="srcNote" rows="5" class="control" placeholder="例）&#10;強み: 京都で30年続く手作りの洋菓子&#10;Instagram: https://www.instagram.com/…&#10;サイト: https://…"></textarea>
@@ -304,23 +308,6 @@
         <h2 class="card-title">Zoomの商談内容</h2>
       </div>
       <div class="card-body">
-        <button id="btnZraLatest" type="button" class="btn btn-primary btn-block" style="margin-bottom:10px">Zoomの最新の商談の要約を取り込む</button>
-        <details id="zraBox" class="zra-box" style="margin-bottom:12px">
-          <summary style="cursor:pointer;font-weight:600">Zoom Revenue Acceleratorから自動で取得<span id="zraPill" class="pill pill-muted" style="margin-left:6px">未設定</span></summary>
-          <p class="hint" style="margin:8px 0">Zoom Revenue Acceleratorで作られたAIの要約を、中継サーバー経由で取り込みます。中継サーバーの作り方は、リポジトリの relay/zoom-ra/README.md を見てください。設定したあとは、商談を選ぶだけです。</p>
-          <label for="zraUrl" class="label">中継サーバーのURL</label>
-          <input id="zraUrl" type="url" class="control" style="margin-top:4px" placeholder="https://kzn-zoom-ra-relay.○○.workers.dev">
-          <label for="zraToken" class="label" style="margin-top:8px;display:block">アクセストークン（中継サーバーに設定した合言葉）</label>
-          <input id="zraToken" type="password" autocomplete="off" class="control" style="margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px">
-          <label class="check-row" style="margin-top:6px"><input id="zraRemember" type="checkbox">この設定を、このブラウザのLocalStorageに保存する（共有PCでは非推奨）</label>
-          <label class="check-row"><input id="zraAuto" type="checkbox" checked>商材を選んだら、直近の商談の要約を自動で取り込む</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
-            <button id="btnZraList" type="button" class="btn btn-sm btn-primary">商談の一覧を取得</button>
-            <select id="zraList" class="control control-sm hidden" style="max-width:100%"></select>
-            <button id="btnZraImport" type="button" class="btn btn-sm hidden">この商談の要約を取り込む</button>
-          </div>
-          <div id="zraStatus" class="hint" style="margin-top:6px" role="status"></div>
-        </details>
         <p class="hint" style="margin-bottom:10px">テキストを貼り付けるか、.vtt / .txt ファイルをここにドラッグ＆ドロップしてください。貼り付け・読み込みと同時に自動で解析して、右の発注書プレビューを埋めます。</p>
         <div id="dropzone" class="dropzone">
           <textarea id="transcript" rows="12" placeholder="ここに文字起こし（またはZoomの要約）を貼り付け、または .vtt / .txt をドロップ" class="control control-plain"></textarea>
@@ -1613,133 +1600,6 @@
     }
   }
 
-  /* ---------- Zoom Revenue Acceleratorの要約を、中継サーバー経由で取得 ---------- */
-  // 中継サーバー(relay/zoom-ra)に、商談の一覧と要約を頼む。送るのは、日付の範囲と商談IDだけ（発注書の内容は送らない）。
-  // 利用者が中継サーバーのURLとアクセストークンを入れたときだけ動く。Zoomの鍵は、中継サーバー側にだけある
-  const ZRA_LS = { url: 'zraUrl', token: 'zraToken', auto: 'zraAuto' };
-  let zraItems = [];
-
-  const zraConfigured = () => !!($('zraUrl').value.trim() && $('zraToken').value.trim());
-  const zraSay = (msg) => { $('zraStatus').textContent = msg; };
-  const zraDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-  async function zraGet(path) {
-    const base = $('zraUrl').value.trim().replace(/\/+$/, '');
-    let res;
-    try {
-      res = await fetch(base + path, { headers: { authorization: 'Bearer ' + $('zraToken').value.trim() } });
-    } catch {
-      throw new Error('中継サーバーに接続できませんでした。URLと、中継サーバーのALLOWED_ORIGIN(このページのURL)の設定を確認してください。');
-    }
-    let data = null;
-    try { data = await res.json(); } catch { /* JSONでない応答 */ }
-    if (!res.ok) {
-      const hint = res.status === 401 ? 'アクセストークン(合言葉)が違います。'
-        : res.status === 502 ? 'Zoom側で取得できませんでした。Zoomアプリの権限(Revenue Acceleratorの会話の読み取り)と、期間内に商談があるかを確認してください。'
-        : '';
-      throw new Error(`取得に失敗しました（HTTP ${res.status}）。${hint}${data && data.error ? ' ' + data.error : ''}`);
-    }
-    return data;
-  }
-
-  const zraPick = (o, keys) => { for (const k of keys) { if (o && typeof o[k] === 'string' && o[k].trim()) return o[k].trim(); } return ''; };
-  const zraListOf = (data) => {
-    const arr = Array.isArray(data) ? data : (data && (data.conversations || data.items || data.data || data.list)) || [];
-    return arr.map(c => ({
-      id: zraPick(c, ['conversation_id', 'id', 'conversationId']),
-      title: zraPick(c, ['title', 'meeting_topic', 'topic', 'name', 'conversation_title']) || '（題名なし）',
-      at: zraPick(c, ['start_time', 'date_time', 'created_at', 'meeting_start_time', 'start_date_time']),
-    })).filter(c => c.id).sort((a, b) => (Date.parse(b.at) || 0) - (Date.parse(a.at) || 0));
-  };
-
-  // 返ってきたJSONから、読める文章を取り出す（URL・ID・日時・メール・名前の欄は除く）。項目名はZoom側の仕様で変わるため、文章の値を全部拾う
-  const ZRA_SKIP_KEY_RE = /(url|link|id|uuid|token|email|time|date|at|name|type|status|duration|size|count|lang|locale)$/i;
-  function zraFlatten(node, key = '', out = []) {
-    if (typeof node === 'string') {
-      const t = node.trim();
-      if (t.length >= 6 && !/^https?:\/\//.test(t) && !ZRA_SKIP_KEY_RE.test(key) && !/^[\w\-=+/.:]{20,}$/.test(t)) out.push(t);
-    } else if (Array.isArray(node)) {
-      node.forEach(x => zraFlatten(x, key, out));
-    } else if (node && typeof node === 'object') {
-      for (const [k, v] of Object.entries(node)) zraFlatten(v, k, out);
-    }
-    return out;
-  }
-
-  async function zraImport(id, title) {
-    zraSay('Zoomから要約を取得しています…');
-    $('btnZraImport').disabled = true; $('btnZraList').disabled = true;
-    try {
-      const data = await zraGet('/conversations/' + encodeURIComponent(id));
-      const lines = uniq(zraFlatten({ detail: data.detail, analysis: data.analysis }));
-      if (!lines.length) { zraSay('要約の文章が見つかりませんでした。Zoom側で、まだ解析が終わっていない可能性があります。しばらくしてから、もう一度お試しください。'); return false; }
-      $('transcript').value = lines.join('\n');
-      const c = calendarClient(title || zraPick(data.detail || {}, ['title', 'meeting_topic', 'topic', 'name']));
-      if (c && !$('client').value.trim()) {
-        $('client').value = c;
-        $('clientAuto').textContent = 'Zoomの商談名から入力・要確認';
-        $('clientAuto').classList.remove('hidden');
-      }
-      zraSay(`「${title || '商談'}」の要約を取り込みました（${lines.length}行）。内容を確認してください。` + (data.analysisError ? '（内容分析は取得できず、詳細だけです）' : ''));
-      runAnalyze();
-      return true;
-    } catch (e) {
-      zraSay(e.message);
-      return false;
-    } finally {
-      $('btnZraImport').disabled = false; $('btnZraList').disabled = false;
-    }
-  }
-
-  async function zraLoadList(autoImportLatest = false) {
-    if (!zraConfigured()) { zraSay('中継サーバーのURLとアクセストークンを入力してください。'); $('zraBox').open = true; return; }
-    zraSay('商談の一覧を取得しています…');
-    $('btnZraList').disabled = true;
-    try {
-      const to = new Date(); const from = new Date(to.getTime() - 30 * 86400000);
-      zraItems = zraListOf(await zraGet(`/conversations?from=${zraDate(from)}&to=${zraDate(to)}`));
-      const sel = $('zraList');
-      sel.textContent = '';
-      zraItems.forEach(c => {
-        const op = document.createElement('option');
-        op.value = c.id;
-        op.textContent = `${c.at ? c.at.slice(0, 16).replace('T', ' ') + '  ' : ''}${c.title}`;
-        sel.appendChild(op);
-      });
-      sel.classList.toggle('hidden', !zraItems.length);
-      $('btnZraImport').classList.toggle('hidden', !zraItems.length);
-      if (!zraItems.length) { zraSay('直近30日の商談が見つかりませんでした。'); return; }
-      zraSay(`${zraItems.length}件の商談が見つかりました。選んで「要約を取り込む」を押してください。`);
-      $('zraPill').textContent = '接続済み'; $('zraPill').className = 'pill pill-brand';
-      if (autoImportLatest) await zraImport(zraItems[0].id, zraItems[0].title);
-    } catch (e) {
-      zraSay(e.message);
-    } finally {
-      $('btnZraList').disabled = false;
-    }
-  }
-
-  function initZra() {
-    const savedUrl = lsGet(ZRA_LS.url), savedTok = lsGet(ZRA_LS.token);
-    if (savedUrl) $('zraUrl').value = savedUrl;
-    if (savedTok) { $('zraToken').value = savedTok; $('zraRemember').checked = true; }
-    const savedAuto = lsGet(ZRA_LS.auto);
-    $('zraAuto').checked = savedAuto === null ? true : savedAuto === '1';
-    const save = () => {
-      if ($('zraRemember').checked) { lsSet(ZRA_LS.url, $('zraUrl').value.trim()); lsSet(ZRA_LS.token, $('zraToken').value.trim()); }
-      else { lsDel(ZRA_LS.url); lsDel(ZRA_LS.token); }
-      $('zraPill').textContent = zraConfigured() ? '設定済み' : '未設定';
-      $('zraPill').className = 'pill ' + (zraConfigured() ? 'pill-brand' : 'pill-muted');
-    };
-    ['zraUrl', 'zraToken'].forEach(id => $(id).addEventListener('input', save));
-    $('zraRemember').addEventListener('change', save);
-    $('zraAuto').addEventListener('change', () => lsSet(ZRA_LS.auto, $('zraAuto').checked ? '1' : '0'));
-    $('btnZraList').addEventListener('click', () => zraLoadList(false));
-    $('btnZraLatest').addEventListener('click', () => zraLoadList(true));   // 押したら、直近の商談の要約を取りに行って解析する
-    $('btnZraImport').addEventListener('click', () => { const id = $('zraList').value; const it = zraItems.find(c => c.id === id); if (id) zraImport(id, it && it.title); });
-    save();
-  }
-
   /* ---------- Googleカレンダー・ドライブから、案件の商談ノートを取得 ---------- */
   // 利用者がGoogleにログイン(読み取りだけの権限)し、予定から案件を選ぶと、その案件の商談ノートをドライブから探して取り込む。
   // Googleへ送るのは、ログインのトークンと、検索語(顧客名など)・日付の範囲・ファイルIDだけ。発注書の内容は送らない。サーバーは使わない
@@ -2440,10 +2300,6 @@
     refreshAll();
     $('transcript').focus();
     if ($('hsDealId').value.trim() && $('hsToken').value.trim()) hsLoadInfo(true);   // 取引IDが入り、トークンが設定済みなら、HubSpotの情報も読み取る
-    if (!srcSummaryText.trim() && $('zraAuto').checked && zraConfigured()) {   // 中継サーバーが設定済みなら、直近の商談の要約を自動で取り込む
-      zraLoadList(true);
-      return;
-    }
     if (srcSummaryText.trim()) {   // Zoomの要約が貼ってあれば、そのまま解析する
       $('transcript').value = srcSummaryText;
       runAnalyze();
@@ -2510,7 +2366,6 @@
     renderAll();
     setupDnD();
     initHubSpotSettings();
-    initZra();
     initGd();
     refreshAll();
 
