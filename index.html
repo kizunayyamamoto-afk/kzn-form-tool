@@ -370,7 +370,7 @@
             </label>
           </div>
           <p class="hint">チケットの作成にはパイプラインとステージが必須です。標準のサポートパイプライン「0」・ステージ「新規」の「1」が初期値です。社内で変更している場合はHubSpotの設定に合わせてください。</p>
-          <p class="hint">必要スコープ: tickets（チケットの作成）、取引・会社の読み取り/書き込み（関連付けと会社の自動取得）。不足している場合はエラー（403）で案内します。トークンは HubSpot の API 以外には送信しません。</p>
+          <p class="hint">HubSpotのPrivate Appに必要なスコープ(中継サーバーに設定するトークンの権限): tickets（チケットの作成）、取引・会社の読み取り（関連付けと会社の自動取得）。不足している場合はエラー（403）で案内します。合言葉は、中継サーバー以外には送信しません。</p>
           <div><button id="btnClearToken" type="button" class="btn btn-sm" style="color:var(--danger)">保存済みのURL・合言葉を削除</button></div>
         </div>
       </div>
