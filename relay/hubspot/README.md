@@ -44,6 +44,9 @@ Cloudflare Workersの**無料プラン**で足ります(1日10万回の呼び出
 
 (コマンドで置く場合は、このフォルダで `npx wrangler deploy` のあと、`npx wrangler secret put HUBSPOT_TOKEN` と `npx wrangler secret put RELAY_TOKEN` を実行します。`wrangler.toml` の `ALLOWED_ORIGIN` は、公開サイトに合わせて直します。)
 
+## 使う人に配る: 設定済みのリンク
+ツールの「HubSpot接続設定」にURLと合言葉を入れて、「**設定済みのリンクをコピー**」を押すと、専用のリンクができます。社内の人に渡すと、開くだけで、URLと合言葉が入ります。リンクは、**合言葉と同じ扱い**です(社内の決まった場所にだけ置く)。合言葉を変えたときは、リンクも作り直して、配り直します。
+
 ## 動作の確認(任意)
 ```bash
 curl -H "Authorization: Bearer <合言葉>" \
