@@ -81,19 +81,19 @@ Zoom Revenue Acceleratorの要約は、自動では取得しません(取得機�
 - 自動取得: Googleカレンダーの予定の説明にHubSpotのリンク(`…/record/0-3/数字`)があると、取引IDが自動で入ります。このとき、HubSpotのトークンが設定済みなら、商材を選んだ時点で、HubSpotの情報も自動で取得します。
 - 送る情報: HubSpotへは、取引ID・会社IDだけです。発注書の内容は送りません。
 - **費用**: Private Appの作成と、このAPIでの読み取りに、追加料金はかからない見込みです(HubSpotの公式の説明で確認してください)。無料・Starterのプランでは、1アプリあたり10秒に100回、アカウントで1日25万回までの上限があります(1回の取得は2回の呼び出しです)。
-- Private Appに必要な権限(スコープ): `crm.objects.deals.read` と `crm.objects.companies.read` の2つだけです。チケットへの転記には、これまでどおり `tickets` の書き込みも必要です。
-- 注意: HubSpot APIをブラウザから直接呼ぶと、CORSで失敗する場合があります(取得も転記も同じです)。失敗したときは、画面に案内が出ます。
+- Private Appに必要な権限(スコープ。中継サーバーに設定するトークンの権限です): `crm.objects.deals.read` と `crm.objects.companies.read` の2つだけです。チケットへの転記には、これまでどおり `tickets` の書き込みも必要です。
+- **中継サーバーが必要です**: HubSpot APIは、ブラウザから直接は呼べない(CORS。「Failed to fetch」と出る)ため、読み取りも転記も、無料の中継サーバー(Cloudflare Workers)を経由します。作り方は [relay/hubspot/README.md](relay/hubspot/README.md)。左カラム「HubSpot接続設定」に、中継サーバーのURLと合言葉を入れます(HubSpotのトークンは、中継サーバー側にだけ置きます)。
 
 ### HubSpotへの転記
 - **取引ID(必須)**: 発注書のチケットを紐づける取引。HubSpotの取引画面のURL末尾の数字です。
 - **会社ID(任意)**: 空にすると、取引に紐づく会社を自動で取得します。
-- 接続設定(トークン、チケット本文のプロパティ名、パイプラインID、ステージID)は左カラム「3. HubSpot接続設定」。パイプライン・ステージはチケット作成に必須で、初期値は標準の「0」「1」です。
+- 接続設定(中継サーバーのURLと合言葉、チケット本文のプロパティ名、パイプラインID、ステージID)は、左カラム「HubSpot接続設定」。
 
 ### 実行・技術・注意
 - 実行: `index.html` をブラウザで開くだけ(Node.js・サーバー不要)。
-- 技術: HTML / Tailwind CSS(CDN) / 素のJavaScript。抽出はルールベースで、AIは使いません(外部通信は、HubSpotへの転記と読み取り、任意のGoogleカレンダー・ドライブの取得のみ)。
-- HubSpotトークンは画面で一時入力、またはブラウザのLocalStorageに保存(HubSpot API以外には送信しません)。
-- 注意: HubSpot APIをブラウザから直接呼ぶとCORSで失敗する場合があります。その場合は「発注書をコピー」で手動貼り付けしてください。
+- 技術: HTML / Tailwind CSS(CDN) / 素のJavaScript。抽出はルールベースで、AIは使いません(外部通信は、HubSpotの中継サーバー経由の読み取り・転記と、任意のGoogleカレンダー・ドライブの取得のみ)。
+- 中継サーバーのURLと合言葉は、画面で一時入力、またはブラウザのLocalStorageに保存します(HubSpotのトークンは、中継サーバー側にだけ置き、ブラウザには置きません)。
+- 中継サーバーに接続できないときは、「発注書をコピー」で、HubSpotのチケットへ手で貼れます。
 
 ## セットアップ
 特にありません。`index.html` を開いて動作確認してください。
