@@ -359,6 +359,15 @@
             <input id="hsProp" type="text" class="control" style="margin-top:5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px">
             <span class="hint">チケット本文の標準: content ／ 社内カスタムプロパティも指定可</span>
           </label>
+          <label>
+            <span class="label">発注書の内容を入れる場所</span>
+            <select id="hsDest" class="control" style="margin-top:5px">
+              <option value="note">チケットのメモだけ（初期値。チケットの説明は空）</option>
+              <option value="both">チケットの説明と、チケットのメモの両方</option>
+              <option value="desc">チケットの説明だけ</option>
+            </select>
+            <span class="hint">メモは、チケットの画面の「メモ」の欄に、発注書の内容が入ります(取引・会社の画面にも、紐づけて表示されます)。</span>
+          </label>
           <div class="grid-2">
             <label>
               <span class="label">パイプラインID</span>
@@ -371,7 +380,11 @@
           </div>
           <p class="hint">チケットの作成にはパイプラインとステージが必須です。標準のサポートパイプライン「0」・ステージ「新規」の「1」が初期値です。社内で変更している場合はHubSpotの設定に合わせてください。</p>
           <p class="hint">HubSpotのPrivate Appに必要なスコープ(中継サーバーに設定するトークンの権限): tickets（チケットの作成）、取引・会社の読み取り（関連付けと会社の自動取得）。不足している場合はエラー（403）で案内します。合言葉は、中継サーバー以外には送信しません。</p>
-          <div><button id="btnClearToken" type="button" class="btn btn-sm" style="color:var(--danger)">保存済みのURL・合言葉を削除</button></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button id="btnMakeLink" type="button" class="btn btn-sm">設定済みのリンクをコピー</button>
+            <button id="btnClearToken" type="button" class="btn btn-sm" style="color:var(--danger)">保存済みのURL・合言葉を削除</button>
+          </div>
+          <p class="hint">「設定済みのリンク」は、上のURLと合言葉を含んだ、専用のリンクです。社内の人に渡すと、開くだけで、URLと合言葉が入った状態になります。<b>リンクは、合言葉と同じ扱い</b>です。社内の決まった場所にだけ置き、公開の場所やお客様には、渡さないでください。</p>
         </div>
       </div>
     </details>
@@ -1418,6 +1431,7 @@
   // HubSpot定義の関連付けタイプID（チケット→取引 / チケット→会社）
   const ASSOC_TICKET_TO_DEAL = 28;
   const ASSOC_TICKET_TO_COMPANY = 26;
+  const ASSOC_NOTE_TO_TICKET = 228;   // メモ→チケット（HubSpot定義）
   let lastTicketId = '';
 
   function showApiError(msg) {
@@ -1545,17 +1559,18 @@
     const dealId = $('hsDealId').value.trim();
     let companyId = $('hsCompanyId').value.trim();
     const prop = $('hsProp').value.trim();
+    const dest = $('hsDest').value;   // note(初期値) | both | desc
     const pipeline = $('hsPipeline').value.trim();
     const stage = $('hsStage').value.trim();
     if (!hsReady()) { $('hsSettings').open = true; showApiError('HubSpotの中継サーバーのURLと合言葉が未設定です。左カラム「2. HubSpot接続設定」で入力してください（作り方は relay/hubspot/README.md）。'); return; }
     if (!/^\d+$/.test(dealId)) { showApiError('HubSpot 取引IDは数字で入力してください（右カラム「発注書プレビュー」の基本情報）。'); return; }
     if (companyId && !/^\d+$/.test(companyId)) { showApiError('HubSpot 会社IDは数字で入力してください（空欄なら取引から自動取得します）。'); return; }
-    if (!prop || !pipeline || !stage) { $('hsSettings').open = true; showApiError('チケットのプロパティ名・パイプラインID・ステージIDを入力してください（左カラム「3. HubSpot接続設定」）。'); return; }
+    if ((dest !== 'note' && !prop) || !pipeline || !stage) { $('hsSettings').open = true; showApiError('チケットのプロパティ名(メモだけの場合は不要)・パイプラインID・ステージIDを入力してください（左カラム「3. HubSpot接続設定」）。'); return; }
 
     const ready = requiredList().every(r => r.ok);
     if (!ready && !confirm('未確定の必須項目があります。このままチケットを作成しますか？')) return;
     if (lastTicketId && !confirm(`このページですでにチケット（ID: ${lastTicketId}）を作成済みです。もう1枚作成しますか？`)) return;
-    if (!confirm(`チケットを新規作成し、取引 ${dealId} ${companyId ? `・会社 ${companyId}` : '・会社（取引から自動取得）'} に紐づけます。よろしいですか？`)) return;
+    if (!confirm(`チケットを新規作成し、取引 ${dealId} ${companyId ? `・会社 ${companyId}` : '・会社（取引から自動取得）'} に紐づけます。${dest !== 'desc' ? '発注書の内容は、チケットのメモにも入れます。' : ''}よろしいですか？`)) return;
 
     const btn = $('btnHubSpot');
     const btnLabel = btn.querySelector('.btn-label');
@@ -1578,7 +1593,7 @@
       const body = {
         properties: {
           subject: `${kind}${$('client').value.trim() || '（顧客名未入力）'}`,
-          [prop]: buildOrderText(),
+          ...(dest !== 'note' ? { [prop]: buildOrderText() } : {}),
           hs_pipeline: pipeline,
           hs_pipeline_stage: stage,
         },
@@ -1590,7 +1605,24 @@
       const t = await hsRequest('/crm/v3/objects/tickets', token, { method: 'POST', body: JSON.stringify(body) });
       if (!t.res.ok) { showApiError(hsErrorText('チケットの作成', t.res, t.json)); toast('チケットの作成に失敗しました', false); return; }
       lastTicketId = t.json && t.json.id ? String(t.json.id) : '（ID不明）';
-      showApiResult(`チケット（ID: ${lastTicketId}）を作成し、取引 ${dealId}・会社 ${companyId} に紐づけました。`);
+      let result = `チケット（ID: ${lastTicketId}）を作成し、取引 ${dealId}・会社 ${companyId} に紐づけました。`;
+      // 発注書の内容を、チケットのメモ(ノート)にも入れる（メモ本文は、HTMLを使わない文字にして、改行だけ <br> にする）
+      if (dest !== 'desc' && t.json && t.json.id) {
+        const esc = (x) => String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const noteBody = {
+          properties: { hs_timestamp: new Date().toISOString(), hs_note_body: esc(buildOrderText()).replace(/\r?\n/g, '<br>') },
+          associations: [{ to: { id: lastTicketId }, types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: ASSOC_NOTE_TO_TICKET }] }],
+        };
+        const n = await hsRequest('/crm/v3/objects/notes', token, { method: 'POST', body: JSON.stringify(noteBody) });
+        if (n.res.ok) result += '\n発注書の内容を、チケットのメモにも入れました。';
+        else {
+          showApiError(hsErrorText('チケットのメモの作成', n.res, n.json) + (n.res.status === 404 ? '\n中継サーバーのプログラム(worker.js)が古い可能性があります。新しい worker.js に更新して、デプロイしてください(relay/hubspot/README.md)。' : '') + `\nチケット（ID: ${lastTicketId}）は作成済みです。` + (dest === 'note' ? '\nメモが作れなかったため、チケットに発注書の内容が入っていません。「発注書をコピー」で、チケットに手で貼ってください。' : '\nチケットの説明には、発注書の内容が入っています。メモは、HubSpotの権限(ノートの書き込み)を確認してください。'));
+          showApiResult(result);
+          toast('チケットは作成しましたが、メモは作れませんでした', false);
+          return;
+        }
+      }
+      showApiResult(result);
       toast('✅ チケットを作成しました');
     } catch (err) {
       showApiError(
@@ -2346,14 +2378,38 @@
   // 入力欄id -> [LocalStorageのキー, 初期値]
   const HS_SETTINGS = {
     hsProp:     ['hsTicketProp', 'content'],
+    hsDest:     ['hsDest', 'note'],
     hsPipeline: ['hsPipeline', '0'],
     hsStage:    ['hsStage', '1'],
   };
+  // 中継サーバーのURL(秘密ではない)。合言葉は、コードには入れない
+  const DEFAULT_RELAY_URL = 'https://kzn-hubspot-relay.kizuna-y-yamamoto.workers.dev';
+  // 設定済みのリンク: …/#relay=<URL>&key=<合言葉>。「#」以降は、サーバーには送られない。読み込んだら、アドレスバーから消す
+  function applySetupLink() {
+    let relay = '', key = '';
+    try {
+      const h = new URLSearchParams(String(location.hash || '').replace(/^#/, ''));
+      relay = (h.get('relay') || '').trim();
+      key = (h.get('key') || '').trim();
+    } catch { return false; }
+    if (!relay && !key) return false;
+    if (/^https:\/\/[^\s]+$/.test(relay)) $('hsRelayUrl').value = relay.replace(/\/+$/, '');
+    if (key) $('hsToken').value = key;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch { /* 消せない環境ではそのまま */ }
+    return true;
+  }
+  function makeSetupLink() {
+    const url = $('hsRelayUrl').value.trim().replace(/\/+$/, '');
+    const key = $('hsToken').value.trim();
+    if (!url || !key) { toast('URLと合言葉を入れてから、押してください', false); return ''; }
+    return `${location.origin}${location.pathname}#relay=${encodeURIComponent(url)}&key=${encodeURIComponent(key)}`;
+  }
   function initHubSpotSettings() {
     const savedToken = lsGet('hsToken');
     if (savedToken) { $('hsToken').value = savedToken; $('hsRemember').checked = true; }
     const savedRelay = lsGet('hsRelayUrl');
-    if (savedRelay) $('hsRelayUrl').value = savedRelay;
+    $('hsRelayUrl').value = savedRelay || DEFAULT_RELAY_URL;   // 初めから入っている(合言葉は入っていない)
+    if (applySetupLink()) toast('リンクから、HubSpotの接続設定(URLと合言葉)を入れました');
     for (const [id, [key, def]] of Object.entries(HS_SETTINGS)) {
       $(id).value = lsGet(key) || def;
       $(id).addEventListener('input', () => lsSet(key, $(id).value.trim()));
@@ -2364,8 +2420,14 @@
     $('hsToken').addEventListener('input', saveToken);
     $('hsRelayUrl').addEventListener('input', saveToken);
     $('hsRemember').addEventListener('change', saveToken);
+    $('btnMakeLink').addEventListener('click', async () => {
+      const link = makeSetupLink();
+      if (!link) return;
+      const ok = await copyText(link);
+      toast(ok ? '設定済みのリンクをコピーしました。社内の人だけに渡してください' : 'コピーできませんでした', ok);
+    });
     $('btnClearToken').addEventListener('click', () => {
-      lsDel('hsToken'); lsDel('hsRelayUrl'); $('hsToken').value = ''; $('hsRelayUrl').value = ''; $('hsRemember').checked = false;
+      lsDel('hsToken'); lsDel('hsRelayUrl'); $('hsToken').value = ''; $('hsRelayUrl').value = DEFAULT_RELAY_URL; $('hsRemember').checked = false;
       toast('保存済みのURL・合言葉を削除しました');
     });
   }
