@@ -362,8 +362,8 @@
           <label>
             <span class="label">発注書の内容を入れる場所</span>
             <select id="hsDest" class="control" style="margin-top:5px">
+              <option value="note">チケットのメモだけ（初期値。チケットの説明は空）</option>
               <option value="both">チケットの説明と、チケットのメモの両方</option>
-              <option value="note">チケットのメモだけ</option>
               <option value="desc">チケットの説明だけ</option>
             </select>
             <span class="hint">メモは、チケットの画面の「メモ」の欄に、発注書の内容が入ります(取引・会社の画面にも、紐づけて表示されます)。</span>
@@ -1559,7 +1559,7 @@
     const dealId = $('hsDealId').value.trim();
     let companyId = $('hsCompanyId').value.trim();
     const prop = $('hsProp').value.trim();
-    const dest = $('hsDest').value;   // both | note | desc
+    const dest = $('hsDest').value;   // note(初期値) | both | desc
     const pipeline = $('hsPipeline').value.trim();
     const stage = $('hsStage').value.trim();
     if (!hsReady()) { $('hsSettings').open = true; showApiError('HubSpotの中継サーバーのURLと合言葉が未設定です。左カラム「2. HubSpot接続設定」で入力してください（作り方は relay/hubspot/README.md）。'); return; }
@@ -2378,7 +2378,7 @@
   // 入力欄id -> [LocalStorageのキー, 初期値]
   const HS_SETTINGS = {
     hsProp:     ['hsTicketProp', 'content'],
-    hsDest:     ['hsDest', 'both'],
+    hsDest:     ['hsDest', 'note'],
     hsPipeline: ['hsPipeline', '0'],
     hsStage:    ['hsStage', '1'],
   };
