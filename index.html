@@ -230,24 +230,9 @@
       <p class="hint" style="margin-bottom:8px">お客様に見せた資料・サイトのURL、既存サイト、Instagram・X・Facebook、GoogleビジネスプロフィールのURLを、改行やスペース区切りでまとめて貼ってください。種類は自動で振り分けます（変更もできます）。下の商材ボタンを押すと、発注書の該当欄に転記されます。</p>
       <textarea id="startUrls" rows="4" placeholder="https://..." class="control"></textarea>
       <div id="startUrlList" class="url-list"></div>
-      <details id="startGbpBox" style="margin-top:10px">
-        <summary style="cursor:pointer;font-weight:600">Googleマップの情報を読み取る<span class="pill pill-muted" style="margin-left:6px">任意</span></summary>
-        <p class="hint" style="margin:8px 0">GoogleマップのURLを上に貼ると、URLに含まれる店名を読み取ります。住所・電話・営業時間は、Googleマップのお店の画面から、店名・住所・電話番号・営業時間の部分をコピーして、下に貼ってください（ツールがGoogleへ接続することはありません）。</p>
-        <textarea id="startGbp" rows="5" placeholder="例）&#10;○○洋菓子店&#10;住所: 京都府京都市○○区△△町1-2-3&#10;電話番号: 075-000-0000&#10;月曜日 10:00〜19:00 …" class="control"></textarea>
-        <div id="startGbpPreview" class="hint" style="margin-top:6px"></div>
-      </details>
     </div>
 
     <div class="start-block">
-      <details id="srcBox">
-        <summary style="cursor:pointer;font-weight:600">案件の資料を取り込む<span class="pill pill-muted" style="margin-left:6px">任意</span></summary>
-        <p class="hint" style="margin:8px 0">Googleカレンダーの予定と、Googleドライブの商談ノートの本文を、コピーして貼ってください。商材を選ぶと、発注書の欄に反映します。ツールがこれらのサービスへ接続することはありません（貼った文章だけを、ブラウザの中で読みます）。</p>
-        <label for="srcCal" class="label">Googleカレンダーの予定（タイトルと説明）</label>
-        <textarea id="srcCal" rows="3" class="control" placeholder="例）&#10;【商談】○○株式会社様 ホームページ打ち合わせ&#10;（説明欄の文章）"></textarea>
-        <label for="srcNote" class="label" style="margin-top:8px;display:block">商談ノート（Googleドキュメントなどの本文）</label>
-        <textarea id="srcNote" rows="5" class="control" placeholder="例）&#10;強み: 京都で30年続く手作りの洋菓子&#10;Instagram: https://www.instagram.com/…&#10;サイト: https://…"></textarea>
-        <div id="srcPreview" class="hint" style="margin-top:6px"></div>
-      </details>
         <details id="gdBox" style="margin-top:10px">
           <summary style="cursor:pointer;font-weight:600">Googleカレンダー・ドライブから案件の商談ノートを取得<span id="gdPill" class="pill pill-muted" style="margin-left:6px">未ログイン</span></summary>
           <p class="hint" style="margin:8px 0">Googleカレンダーの予定から案件を選び、その案件の商談ノート(Googleドキュメント)をGoogleドライブから探して取り込みます。取り込んだあと、下の商材を選ぶと、発注書の欄に反映します。Googleにログインして読み取るだけで、書き込み・削除はしません。サーバーは要りません。準備のしかたは、READMEの「Googleカレンダー・ドライブの連携」を見てください。</p>
@@ -1467,7 +1452,10 @@
   };
   function hsErrorText(step, res, json) {
     const detail = json && (json.message || json.error) ? '\n詳細: ' + (json.message || json.error) : '';
-    return `${step}に失敗しました（HTTP ${res.status}）。\n${HS_HINTS[res.status] || 'HubSpot側でエラーが発生しました。'}${detail}`;
+    // 中継サーバーが「許可していない操作」と返したときは、IDの案内ではなく、中継サーバーの更新を案内する
+    const notAllowed = json && json.error === '許可していない操作です。';
+    const hint = notAllowed ? '中継サーバーが、この操作を許可していません。中継サーバーのプログラム(worker.js)が古い可能性があります。新しい worker.js に更新して、デプロイしてください(relay/hubspot/README.md)。' : (HS_HINTS[res.status] || 'HubSpot側でエラーが発生しました。');
+    return `${step}に失敗しました（HTTP ${res.status}）。\n${hint}${notAllowed ? '' : detail}`;
   }
 
   /* ---------- HubSpotにある情報（取引・会社）を取得して、発注書に反映 ---------- */
@@ -1616,7 +1604,7 @@
         const n = await hsRequest('/crm/v3/objects/notes', token, { method: 'POST', body: JSON.stringify(noteBody) });
         if (n.res.ok) result += '\n発注書の内容を、チケットのメモにも入れました。';
         else {
-          showApiError(hsErrorText('チケットのメモの作成', n.res, n.json) + (n.res.status === 404 ? '\n中継サーバーのプログラム(worker.js)が古い可能性があります。新しい worker.js に更新して、デプロイしてください(relay/hubspot/README.md)。' : '') + `\nチケット（ID: ${lastTicketId}）は作成済みです。` + (dest === 'note' ? '\nメモが作れなかったため、チケットに発注書の内容が入っていません。「発注書をコピー」で、チケットに手で貼ってください。' : '\nチケットの説明には、発注書の内容が入っています。メモは、HubSpotの権限(ノートの書き込み)を確認してください。'));
+          showApiError(hsErrorText('チケットのメモの作成', n.res, n.json) + `\nチケット（ID: ${lastTicketId}）は作成済みです。` + (dest === 'note' ? '\nメモが作れなかったため、チケットに発注書の内容が入っていません。「発注書をコピー」で、チケットに手で貼ってください。' : '\nチケットの説明には、発注書の内容が入っています。メモは、HubSpotの権限(ノートの書き込み)を確認してください。'));
           showApiResult(result);
           toast('チケットは作成しましたが、メモは作れませんでした', false);
           return;
@@ -1809,11 +1797,8 @@
     const e = gdCurrentEvent();
     srcCalText = e ? [e.summary, gdPlain(e.description)].filter(Boolean).join('\n') : '';
     srcNoteText = noteText || '';
-    if ($('startScreen')) {   // 商材を選ぶ前: 「案件の資料の取り込み」の欄に入れ、商材を選んだときに欄へ反映する
-      $('srcCal').value = srcCalText;
-      $('srcNote').value = srcNoteText;
-      renderSrcPreview();
-      $('srcBox').open = true;
+    if ($('startScreen')) {   // 商材を選ぶ前: 内容を覚えておき、商材を選んだときに欄へ反映する
+      gdSay(`取り込みました。${srcPreviewText()}　下の商材を選ぶと、発注書の欄に反映します。`);
       return -1;
     }
     const n = applySourceInfo();
@@ -1832,7 +1817,7 @@
       const text = (await gdGet(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}/export?mimeType=text%2Fplain`, true)).replace(/^\ufeff/, '');
       if (!text.trim()) { gdSay('商談ノートの本文が空でした。'); return; }
       const n = gdApply(text);
-      if (n < 0) { gdSay('商談ノートと予定を取り込みました（「案件の資料の取り込み」の欄に入っています）。下の商材を選ぶと、発注書の欄に反映します。'); toast('取り込みました。商材を選んでください'); }
+      if (n < 0) { toast('取り込みました。商材を選んでください'); }   // 案内は gdApply が出している
       else { gdSay(`商談ノートと予定から${n}項目を反映しました。内容を必ず確認してください。`); toast(`商談ノートから${n}項目を反映しました。内容を確認してください`, n > 0); }
     } catch (e) {
       gdSay(e.message);
@@ -1859,7 +1844,7 @@
     $('btnGdImport').addEventListener('click', gdImportDoc);
     $('btnGdEventOnly').addEventListener('click', () => {
       const n = gdApply('');
-      if (n < 0) { gdSay('予定を取り込みました。下の商材を選ぶと、発注書の欄に反映します。'); toast('取り込みました。商材を選んでください'); return; }
+      if (n < 0) { toast('取り込みました。商材を選んでください'); return; }
       gdSay(`予定から${n}項目を反映しました。`);
       toast(n ? `予定から${n}項目を反映しました。内容を確認してください` : '予定から反映できる項目がありませんでした', n > 0);
     });
@@ -1948,7 +1933,6 @@
   const IG_HANDLE_RE = /instagram\.com\/(?!p\/|reel\/|reels\/|explore\/|stories\/)([A-Za-z0-9._]+)/i;
   const X_HANDLE_RE = /(?:x\.com|twitter\.com)\/(?!i\/|home|search|intent\/)([A-Za-z0-9_]+)/i;
   let startUrls = [];            // [{ url, cat }]
-  let startGbpText = '';         // 起動画面に貼ったGoogleマップの情報（画面を閉じても使えるよう保持）
   const lockedIds = new Set();   // 起動時のURLから入れた欄（文字起こしの解析で上書きしない）
 
   function guessUrlCat(u) {
@@ -2000,69 +1984,6 @@
     }
     startUrls = next;
     renderStartUrlList();
-  }
-
-  // ---- Googleマップ（GBP）の情報 ----
-  // URLの /maps/place/店名/ や ?q=店名 から店名を取り出す（短縮URLからは取れない）
-  function gbpNameFromUrl(u) {
-    let raw = '';
-    const m = u.match(/google\.[a-z.]+\/maps\/place\/([^/@?#]+)/i);
-    if (m) raw = m[1];
-    else {
-      const q = u.match(/google\.[a-z.]+\/maps[^#]*[?&](?:q|query)=([^&#]+)/i);
-      if (q) raw = q[1];
-    }
-    if (!raw) return '';
-    let name = '';
-    try { name = decodeURIComponent(raw.replace(/\+/g, ' ')).trim(); } catch { name = raw.replace(/\+/g, ' ').trim(); }
-    if (!name || /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(name)) return '';   // 座標だけのときは店名ではない
-    return name;
-  }
-
-  const GBP_DAY = /[月火水木金土日](?:曜日|曜)?/;
-  // お店の画面からコピーしたテキストを、店名・郵便番号・住所・電話・営業時間に分ける
-  function parseGbpText(text) {
-    const out = { name: '', zip: '', addr: '', tel: '', hours: '' };
-    const lines = String(text || '').split(/\r?\n/).map(l => l.replace(/[\u200b\ufeff]/g, '').trim()).filter(Boolean);
-    const strip = (l) => l.replace(/^(住所|所在地|電話番号?|電話|TEL|Tel|営業時間|定休日|店名|名称)\s*[:：]\s*/, '').trim();
-    const telRe = /(0\d{1,4}[-ー−‐－]\d{1,4}[-ー−‐－]\d{3,4})/;
-    const hourLines = [];
-    const used = new Set();
-    lines.forEach((l, i) => {
-      const v = strip(l);
-      const tel = v.match(telRe);
-      if (!out.tel && tel && v.length <= 40 && !/\d{1,2}:\d{2}/.test(v)) { out.tel = tel[1].replace(/[ー−‐－]/g, '-'); used.add(i); return; }
-      const zip = v.match(/〒?\s*(\d{3})[-ー−‐－]?(\d{4})/);
-      if (!out.addr && (/〒/.test(v) || /(北海道|[^\s]{2,3}[都府県])[^\s]*[市区町村郡]/.test(v)) && !GBP_DAY.test(v.slice(0, 3))) {
-        if (zip) out.zip = '〒' + zip[1] + '-' + zip[2];
-        out.addr = v.replace(/〒?\s*\d{3}[-ー−‐－]?\d{4}\s*/, '').replace(/^日本[、,]\s*/, '').trim();
-        used.add(i); return;
-      }
-      if (/^(営業時間|定休日|営業時間と定休日)$/.test(v)) { used.add(i); return; }   // 見出しだけの行
-      if ((GBP_DAY.test(v) && /\d{1,2}:\d{2}/.test(v)) || /^(営業時間|定休日)/.test(l) || /^\d{1,2}:\d{2}\s*[〜~～–-]\s*\d{1,2}:\d{2}/.test(v) || /^(24時間営業|定休日)/.test(v)) {
-        hourLines.push(v.replace(/\s+/g, ' ')); used.add(i);
-      }
-    });
-    out.hours = hourLines.join(' / ');
-    const nameLine = lines.find((l, i) => !used.has(i) && l.length <= 60 && !/https?:\/\//.test(l) && !/^(営業中|営業時間|閉店|定休日|ウェブサイト|ルート|保存|共有|クチコミ|写真|概要|メニュー|予約)/.test(l) && !/^[\d.]+(\s|\()/.test(l));
-    if (nameLine) out.name = strip(nameLine);
-    return out;
-  }
-
-  // 起動画面の情報を、いまの内容に合わせてまとめる（貼り付けた情報 > URLの店名）
-  function gbpInfo() {
-    const text = parseGbpText(startGbpText);
-    const urlName = startUrls.filter(r => r.cat === 'gbp').map(r => gbpNameFromUrl(r.url)).find(Boolean) || '';
-    return {
-      name: text.name || urlName,
-      zip: text.zip, addr: text.addr, tel: text.tel, hours: text.hours,
-    };
-  }
-
-  function renderGbpPreview() {
-    const g = gbpInfo();
-    const items = [['店名', g.name], ['郵便番号', g.zip], ['住所', g.addr], ['電話', g.tel], ['営業時間', g.hours]].filter(x => x[1]);
-    $('startGbpPreview').textContent = items.length ? '読み取り結果: ' + items.map(x => `${x[0]}=${x[1]}`).join(' ／ ') : '';
   }
 
   /* ---------- 案件の資料の取り込み（商談ノート・カレンダーの予定・Zoomの要約）---------- */
@@ -2191,7 +2112,8 @@
     return { fields, urls: uniq(urls), none, has, dealId, free, client, any: !!(Object.keys(fields).length || urls.length || free || client || dealId) };
   }
 
-  function renderSrcPreview() {
+  // 取り込んだ内容の要約(何が読み取れたか)
+  function srcPreviewText() {
     const i = sourceInfo();
     const parts = [];
     if (i.client) parts.push(`顧客名=${i.client}`);
@@ -2199,8 +2121,7 @@
     for (const [k, v] of Object.entries(i.fields)) { if (k !== 'client') parts.push(`${JA[k] || k}=${String(v).replace(/\n/g, ' ').slice(0, 24)}`); }
     if (i.urls.length) parts.push(`URL ${i.urls.length}件`);
     if (i.dealId) parts.push(`取引ID=${i.dealId}`);
-    if (srcSummaryText.trim()) parts.push('Zoomの要約あり');
-    $('srcPreview').textContent = parts.length ? '読み取り結果: ' + parts.join(' ／ ') : '';
+    return parts.length ? '読み取り結果: ' + parts.join(' ／ ') : '';
   }
 
   // 資料のURLを、起動画面のURL一覧に加える（種類は自動判定。既存サイトは最初の1件だけ）
@@ -2269,14 +2190,8 @@
     const xx = accountFirst(xx0, X_HANDLE_RE);
     const handleOf = (u, re) => { const m = u.match(re); return m ? '@' + m[1] : ''; };
     const out = {};
-    const g = gbpInfo();
     let skipped = 0;
     if (isNest()) {
-      if (g.name) Object.assign(out, { shop: g.name, store_name: g.name });
-      if (g.zip) out.store_zip = g.zip;
-      if (g.addr) out.store_addr = g.addr;
-      if (g.tel) out.store_tel = g.tel;
-      if (g.hours) out.store_hours = g.hours;
       if (ig[0]) Object.assign(out, { ig_url: ig[0], ig_has: 'あり', ig_name: handleOf(ig[0], IG_HANDLE_RE) });
       if (fb[0]) Object.assign(out, { fb_url: fb[0], fb_has: 'あり' });
       if (xx[0]) Object.assign(out, { x_url: xx[0], x_has: 'あり', x_name: handleOf(xx[0], X_HANDLE_RE) });
@@ -2296,8 +2211,6 @@
       other.forEach(u => notes.push('その他: ' + u));
       const urls = [...site.map(u => '【既存サイト】' + u), ...sample.map(u => '【提示資料・サンプル】' + u)];
       if (urls.length) out.urls = urls.join('\n');
-      const gbpLines = [g.zip && g.addr ? `${g.zip} ${g.addr}` : (g.addr || g.zip), g.tel && `電話: ${g.tel}`, g.hours && `営業時間: ${g.hours}`].filter(Boolean);
-      if (gbpLines.length) notes.push('【Googleマップ】' + gbpLines.join(' ／ '));
       if (notes.length) out.notes = notes.join('\n');
     }
     return { fields: out, skipped };
@@ -2329,12 +2242,6 @@
     renderAll();
     const nSrc = applySourceInfo();
     const { n, skipped } = applyStartUrls();
-    const gName = gbpInfo().name;
-    if (gName && !$('client').value.trim()) {
-      $('client').value = gName;
-      $('clientAuto').textContent = 'Googleマップから入力・要確認';
-      $('clientAuto').classList.remove('hidden');
-    }
     refreshAll();
     $('transcript').focus();
     if ($('hsDealId').value.trim() && hsReady()) hsLoadInfo(true);   // 取引IDが入り、トークンが設定済みなら、HubSpotの情報も読み取る
@@ -2354,12 +2261,8 @@
     const byQuery = { nest: 'nest', raqmo: 'RAQMO' };
     let q = '';
     try { q = (new URLSearchParams(location.search).get('product') || '').toLowerCase(); } catch { q = ''; }
-    $('startUrls').addEventListener('input', () => { parseStartUrls(); renderGbpPreview(); });
-    const srcIn = (id, set) => $(id).addEventListener('input', () => { set($(id).value); renderSrcPreview(); });
-    srcIn('srcSummary', v => { srcSummaryText = v; });
-    srcIn('srcCal', v => { srcCalText = v; });
-    srcIn('srcNote', v => { srcNoteText = v; });
-    $('startGbp').addEventListener('input', () => { startGbpText = $('startGbp').value; renderGbpPreview(); });
+    $('startUrls').addEventListener('input', parseStartUrls);
+    $('srcSummary').addEventListener('input', () => { srcSummaryText = $('srcSummary').value; });
     document.querySelectorAll('#startScreen [data-product]').forEach(b => {
       b.addEventListener('click', () => chooseProduct(b.dataset.product));
     });
