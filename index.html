@@ -1452,7 +1452,10 @@
   };
   function hsErrorText(step, res, json) {
     const detail = json && (json.message || json.error) ? '\n詳細: ' + (json.message || json.error) : '';
-    return `${step}に失敗しました（HTTP ${res.status}）。\n${HS_HINTS[res.status] || 'HubSpot側でエラーが発生しました。'}${detail}`;
+    // 中継サーバーが「許可していない操作」と返したときは、IDの案内ではなく、中継サーバーの更新を案内する
+    const notAllowed = json && json.error === '許可していない操作です。';
+    const hint = notAllowed ? '中継サーバーが、この操作を許可していません。中継サーバーのプログラム(worker.js)が古い可能性があります。新しい worker.js に更新して、デプロイしてください(relay/hubspot/README.md)。' : (HS_HINTS[res.status] || 'HubSpot側でエラーが発生しました。');
+    return `${step}に失敗しました（HTTP ${res.status}）。\n${hint}${notAllowed ? '' : detail}`;
   }
 
   /* ---------- HubSpotにある情報（取引・会社）を取得して、発注書に反映 ---------- */
@@ -1601,7 +1604,7 @@
         const n = await hsRequest('/crm/v3/objects/notes', token, { method: 'POST', body: JSON.stringify(noteBody) });
         if (n.res.ok) result += '\n発注書の内容を、チケットのメモにも入れました。';
         else {
-          showApiError(hsErrorText('チケットのメモの作成', n.res, n.json) + (n.res.status === 404 ? '\n中継サーバーのプログラム(worker.js)が古い可能性があります。新しい worker.js に更新して、デプロイしてください(relay/hubspot/README.md)。' : '') + `\nチケット（ID: ${lastTicketId}）は作成済みです。` + (dest === 'note' ? '\nメモが作れなかったため、チケットに発注書の内容が入っていません。「発注書をコピー」で、チケットに手で貼ってください。' : '\nチケットの説明には、発注書の内容が入っています。メモは、HubSpotの権限(ノートの書き込み)を確認してください。'));
+          showApiError(hsErrorText('チケットのメモの作成', n.res, n.json) + `\nチケット（ID: ${lastTicketId}）は作成済みです。` + (dest === 'note' ? '\nメモが作れなかったため、チケットに発注書の内容が入っていません。「発注書をコピー」で、チケットに手で貼ってください。' : '\nチケットの説明には、発注書の内容が入っています。メモは、HubSpotの権限(ノートの書き込み)を確認してください。'));
           showApiResult(result);
           toast('チケットは作成しましたが、メモは作れませんでした', false);
           return;
