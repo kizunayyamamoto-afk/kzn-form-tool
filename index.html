@@ -281,7 +281,7 @@
       <label for="srcSummary" class="label">Zoom Revenue Acceleratorの要約<span class="pill pill-muted">任意</span></label>
       <p class="hint" style="margin-bottom:8px">Zoom Revenue Accelerator(旧 Zoom IQ)の商談の画面から、AIが作った要約をコピーして、ここに貼ってください。下の「要約を解析して発注書に反映」を押すと、発注書の欄に入れます。（要約がなければ、上の「Zoomの商談内容」に、文字起こしを貼ることもできます）</p>
       <textarea id="srcSummary" rows="6" class="control" placeholder="Zoom Revenue Acceleratorの要約を貼り付け"></textarea>
-      <button id="btnApplySummary" type="button" class="btn btn-sm btn-primary" style="margin-top:8px">要約を解析して発注書に反映</button>
+      <button id="btnApplySummary" type="button" class="btn btn-sm btn-primary" style="margin-top:8px">もう一度解析する</button>
     </div>
 
     <div class="start-block">
@@ -2334,10 +2334,30 @@
     $('startUrls').addEventListener('input', parseStartUrls);
     $('srcSummary').addEventListener('input', () => { srcSummaryText = $('srcSummary').value; });
     // 商材を選んだあとの画面で使う: 要約の解析、URLの転記
-    $('btnApplySummary').addEventListener('click', () => {
-      if (!srcSummaryText.trim()) { toast('Zoomの要約を貼り付けてください', false); return; }
-      $('transcript').value = srcSummaryText;
+    // Zoom要約: 貼り付け・入力・ファイルのドロップで、そのまま解析して発注書に反映する(同じ内容は、続けて解析しない)
+    let lastSummary = '', summaryTimer = 0;
+    const applySummary = (force) => {
+      clearTimeout(summaryTimer);
+      const t = $('srcSummary').value;
+      if (!t.trim()) { if (force) toast('Zoomの要約を貼り付けてください', false); return; }
+      if (!force && t === lastSummary) return;
+      lastSummary = t;
+      $('transcript').value = t;
       runAnalyze();
+    };
+    $('btnApplySummary').addEventListener('click', () => applySummary(true));
+    $('srcSummary').addEventListener('paste', () => setTimeout(() => applySummary(false), 0));
+    $('srcSummary').addEventListener('input', () => { clearTimeout(summaryTimer); summaryTimer = setTimeout(() => applySummary(false), 1500); });   // 入力が止まって1.5秒後
+    const sumBox = $('srcSummary');
+    ['dragenter', 'dragover'].forEach(ev => sumBox.addEventListener(ev, e => { e.preventDefault(); sumBox.classList.add('drop-active'); }));
+    ['dragleave', 'drop'].forEach(ev => sumBox.addEventListener(ev, e => { e.preventDefault(); sumBox.classList.remove('drop-active'); }));
+    sumBox.addEventListener('drop', async (e) => {
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!f) return;
+      if (!/\.(vtt|txt)$/i.test(f.name)) { toast('.vtt または .txt ファイルを入れてください', false); return; }
+      sumBox.value = await f.text();
+      srcSummaryText = sumBox.value;
+      applySummary(false);
     });
     $('btnApplyUrls').addEventListener('click', () => {
       parseStartUrls();
