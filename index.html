@@ -1577,7 +1577,7 @@
           return;
         }
       }
-      const kind = isNest() ? '【nestの発注】' : '【制作発注】';
+      const kind = isNest() ? '【nestの発注】' : '【RAQMO-LP】';
       const body = {
         properties: {
           subject: `${kind}${$('client').value.trim() || '（顧客名未入力）'}`,
