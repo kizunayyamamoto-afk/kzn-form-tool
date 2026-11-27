@@ -279,7 +279,7 @@
       <div class="card-body">
     <div class="start-block">
       <label for="srcSummary" class="label">Zoom Revenue Acceleratorの要約<span class="pill pill-muted">任意</span></label>
-      <p class="hint" style="margin-bottom:8px">Zoom Revenue Accelerator(旧 Zoom IQ)の商談の画面から、AIが作った要約をコピーして、ここに貼ってください。下の「要約を解析して発注書に反映」を押すと、発注書の欄に入れます。（要約がなければ、上の「Zoomの商談内容」に、文字起こしを貼ることもできます）</p>
+      <p class="hint" style="margin-bottom:8px">Zoom Revenue Accelerator(旧 Zoom IQ)の商談の画面から、AIが作った要約をコピーして、ここに貼ってください。貼り付ける、入力する、または「ファイルを選択」で .txt / .vtt を読み込む(ここにドロップもできる)と、自動で解析して、発注書の欄に入ります。</p>
       <textarea id="srcSummary" rows="6" class="control" placeholder="Zoom Revenue Acceleratorの要約を貼り付け"></textarea>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
         <label class="btn btn-sm" style="cursor:pointer">
@@ -2339,7 +2339,7 @@
     $('srcSummary').focus();
     if ($('hsDealId').value.trim() && hsReady()) hsLoadInfo(true);   // 取引IDが入り、トークンが設定済みなら、HubSpotの情報も読み取る
     if (announce) {
-      toast('文字起こし（.vtt / .txt）を入れるか貼り付けると、自動で項目を埋めます');
+      toast('左の「Zoom要約」の欄に、要約を貼り付けると、自動で項目を埋めます');
     }
   }
   function setupStartScreen() {
