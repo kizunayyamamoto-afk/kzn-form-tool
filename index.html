@@ -240,7 +240,7 @@
   <!-- ===================== 左カラム：入力 ===================== -->
   <section class="col-left" aria-label="入力">
 
-    <div class="card">
+    <div id="zoomCard" class="card hidden">   <!-- 非表示: 要約の解析で内部的に使う -->
       <div class="card-head">
         <span class="step-no">1</span>
         <h2 class="card-title">Zoomの商談内容</h2>
@@ -271,12 +271,11 @@
       </div>
     </div>
 
-    <details id="srcCard" class="card" open>
-      <summary>
-        <span class="step-no">＋</span>
-        <span class="card-title">Zoom要約・URL・Googleカレンダーの取り込み<span class="pill pill-muted" style="margin-left:6px">任意</span></span>
-        <svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>
-      </summary>
+    <div id="srcCard" class="card">
+      <div class="card-head">
+        <span class="step-no">1</span>
+        <h2 class="card-title">Zoom要約・URL・Googleカレンダーの取り込み<span class="pill pill-muted" style="margin-left:6px">任意</span></h2>
+      </div>
       <div class="card-body">
     <div class="start-block">
       <label for="srcSummary" class="label">Zoom Revenue Acceleratorの要約<span class="pill pill-muted">任意</span></label>
@@ -294,7 +293,7 @@
     </div>
 
     <div class="start-block">
-        <details id="gdBox">
+        <details id="gdBox" open>
           <summary style="cursor:pointer;font-weight:600">Googleカレンダー・ドライブから案件の商談ノートを取得<span id="gdPill" class="pill pill-muted" style="margin-left:6px">未ログイン</span></summary>
           <p class="hint" style="margin:8px 0">Googleカレンダーの予定から案件を選び、その案件の商談ノート(Googleドキュメント)をGoogleドライブから探して取り込みます。取り込むと、発注書の欄に反映します。Googleにログインして読み取るだけで、書き込み・削除はしません。サーバーは要りません。準備のしかたは、READMEの「Googleカレンダー・ドライブの連携」を見てください。</p>
           <label for="gdClientId" class="label">GoogleのOAuthクライアントID</label>
@@ -323,7 +322,7 @@
             <button id="btnGdImport" type="button" class="btn btn-sm btn-primary" style="margin-top:8px">この商談ノートを取り込む</button>
           </div>
           <div id="gdStatus" class="hint" style="margin-top:6px" role="status"></div>
-        </details>
+        </div>
     </div>
 
       </div>
@@ -426,6 +425,15 @@
                 <input id="hsCompanyId" type="text" inputmode="numeric" placeholder="会社ID（任意）" class="control" aria-label="HubSpot 会社ID">
               </div>
               <p class="hint" style="margin-top:6px">発注書は<b>新しいチケット</b>として作成され、ここで指定した<b>取引</b>と<b>会社</b>に紐づきます。会社IDを空にすると、取引に紐づく会社を自動で取得します。IDは、HubSpotのレコード画面のURL末尾の数字です。</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+                <button id="btnHsFind" type="button" class="btn btn-sm">顧客名から取引を探す</button>
+                <span id="hsFindStatus" class="hint" role="status"></span>
+              </div>
+              <div id="hsCandWrap" class="hidden" style="margin-top:8px">
+                <label for="hsCand" class="label">取引の候補（顧客名で検索）</label>
+                <select id="hsCand" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
+                <button id="btnHsPick" type="button" class="btn btn-sm btn-primary" style="margin-top:8px">この取引を使う</button>
+              </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
                 <button id="btnHsLoad" type="button" class="btn btn-sm">HubSpotの情報を取得して反映</button>
                 <span id="hsInfoStatus" class="hint" role="status"></span>
@@ -1300,6 +1308,7 @@
   }
 
   function refreshAll() {
+    if (typeof scheduleHsFind === 'function') scheduleHsFind();
     const reqMap = new Map(requiredList().map(r => [r.id, r]));
     for (const [id, e] of Object.entries(els)) {
       const r = reqMap.get(id);
@@ -1549,6 +1558,70 @@
     } finally {
       $('btnHsLoad').disabled = false;
     }
+  }
+
+  /* ---------- 顧客名から、HubSpotの取引IDと会社IDを探す ---------- */
+  // 顧客名で、取引を検索する(読み取りだけ)。1件なら、取引ID・会社IDを自動で入れる。複数なら候補から選ぶ。
+  // 手入力した取引IDは、上書きしない(自動で入れたIDだけ、顧客名を変えると、探し直す)
+  let hsIdAuto = false, hsFoundName = '', hsFindTimer = 0, hsFindSeq = 0;
+  const hsFindSay = (msg) => { $('hsFindStatus').textContent = msg; };
+  const hsStageLabel = (d) => d.dealstage ? `（ステージ: ${d.dealstage}）` : '';
+
+  async function hsUseDeal(id) {
+    $('hsDealId').value = id;
+    hsIdAuto = true;
+    $('hsCompanyId').value = '';   // 会社IDは、取引から取り直す
+    $('hsCandWrap').classList.add('hidden');
+    await hsLoadInfo(true);        // 取引に紐づく会社IDも、ここで入る
+  }
+
+  async function hsFindDeals(auto) {
+    const name = $('client').value.trim();
+    const mySeq = ++hsFindSeq;
+    if (name.length < 2) { if (!auto) hsFindSay('顧客名を2文字以上で入力してください。'); return; }
+    if (!hsReady()) { if (!auto) { $('hsSettings').open = true; hsFindSay('HubSpotの中継サーバーのURLと合言葉が未設定です（左カラム「2. HubSpot接続設定」）。'); } return; }
+    if (auto && $('hsDealId').value.trim() && !hsIdAuto) return;   // 手入力のIDは、そのまま
+    hsFoundName = name;
+    hsFindSay('HubSpotで、取引を探しています…');
+    try {
+      const r = await hsRequest('/crm/v3/objects/deals/search', $('hsToken').value.trim(), {
+        method: 'POST',
+        body: JSON.stringify({ query: name, limit: 10, properties: ['dealname', 'dealstage', 'closedate', 'hs_lastmodifieddate'] }),
+      });
+      if (mySeq !== hsFindSeq) return;   // 新しい検索が始まっていたら、捨てる
+      if (!r.res.ok) { hsFindSay(hsErrorText('取引の検索', r.res, r.json).replace(/\n/g, ' ')); return; }
+      const rows = (r.json && r.json.results) || [];
+      if (!rows.length) { $('hsCandWrap').classList.add('hidden'); hsFindSay(`「${name}」の取引は、見つかりませんでした。顧客名を直すか、取引IDを直接入力してください。`); return; }
+      if (rows.length === 1) {
+        const d = rows[0].properties || {};
+        hsFindSay(`取引「${d.dealname || rows[0].id}」${hsStageLabel(d)}を、見つけました。取引ID・会社IDを入れました。違うときは、直してください。`);
+        await hsUseDeal(String(rows[0].id));
+        return;
+      }
+      const sel = $('hsCand');
+      sel.textContent = '';
+      rows.forEach((x) => {
+        const d = x.properties || {};
+        const op = document.createElement('option');
+        op.value = String(x.id);
+        op.textContent = `${d.dealname || '(名前なし)'} ${hsStageLabel(d)} ID:${x.id}`.trim();
+        sel.appendChild(op);
+      });
+      $('hsCandWrap').classList.remove('hidden');
+      hsFindSay(`取引が${rows.length}件、見つかりました。下の候補から、選んでください。`);
+    } catch (err) {
+      if (mySeq !== hsFindSeq) return;
+      hsFindSay('HubSpotの中継サーバーと通信できませんでした。中継サーバーのURLと、ALLOWED_ORIGINの設定を確認してください。');
+    }
+  }
+
+  // 顧客名が入って(または自動入力されて)から、少し待って、自動で探す
+  function scheduleHsFind() {
+    clearTimeout(hsFindTimer);
+    const name = $('client').value.trim();
+    if (name.length < 2 || name === hsFoundName || !hsReady()) return;
+    if ($('hsDealId').value.trim() && !hsIdAuto) return;
+    hsFindTimer = setTimeout(() => hsFindDeals(true), 900);
   }
 
   async function sendToHubSpot() {
@@ -2248,7 +2321,7 @@
     $('btnRestart').classList.remove('hidden');
     renderAll();
     refreshAll();
-    $('transcript').focus();
+    $('srcSummary').focus();
     if ($('hsDealId').value.trim() && hsReady()) hsLoadInfo(true);   // 取引IDが入り、トークンが設定済みなら、HubSpotの情報も読み取る
     if (announce) {
       toast('文字起こし（.vtt / .txt）を入れるか貼り付けると、自動で項目を埋めます');
@@ -2355,7 +2428,10 @@
     $('product').addEventListener('change', () => { renderAll(); applyStartUrls(); refreshAll(); });
     $('btnClean').addEventListener('click', () => { if (runClean()) toast('整形しました'); });
     $('btnAnalyze').addEventListener('click', runAnalyze);
-    $('client').addEventListener('input', () => $('clientAuto').classList.add('hidden'));
+    $('client').addEventListener('input', () => { $('clientAuto').classList.add('hidden'); scheduleHsFind(); });
+    $('hsDealId').addEventListener('input', () => { hsIdAuto = false; });
+    $('btnHsFind').addEventListener('click', () => hsFindDeals(false));
+    $('btnHsPick').addEventListener('click', () => { const v = $('hsCand').value; if (v) { hsFindSay('取引を選びました。'); hsUseDeal(v); } });
     $('btnCopyConfirm').addEventListener('click', async () => {
       reviewed = true;
       refreshAll();
