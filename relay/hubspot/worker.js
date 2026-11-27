@@ -9,6 +9,7 @@
 //
 // 使えるAPI（これ以外は404。HubSpotの任意のAPIを中継することはしない）:
 //   GET  /crm/v3/objects/deals/{取引ID}                      … 取引の読み取り
+//   GET  /crm/v3/owners/{担当者ID}                           … 取引の担当者（営業）の名前の読み取り
 //   GET  /crm/v3/objects/companies/{会社ID}                  … 会社の読み取り
 //   GET  /crm/v4/objects/deals/{取引ID}/associations/companies … 取引に紐づく会社のID
 //   POST /crm/v3/objects/deals/search                        … 取引を、顧客名で探す（読み取りだけ。検索語・件数・返すプロパティを制限）
@@ -21,6 +22,7 @@ const HUBSPOT_API = 'https://api.hubapi.com';
 const ROUTES = [
   { method: 'GET', re: /^\/crm\/v3\/objects\/deals\/\d{1,20}$/ },
   { method: 'GET', re: /^\/crm\/v3\/objects\/companies\/\d{1,20}$/ },
+  { method: 'GET', re: /^\/crm\/v3\/owners\/\d{1,20}$/ },
   { method: 'GET', re: /^\/crm\/v4\/objects\/deals\/\d{1,20}\/associations\/companies$/ },
   { method: 'POST', re: /^\/crm\/v3\/objects\/deals\/search$/ },
   { method: 'POST', re: /^\/crm\/v3\/objects\/tickets$/ },
