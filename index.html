@@ -240,7 +240,7 @@
   <!-- ===================== 左カラム：入力 ===================== -->
   <section class="col-left" aria-label="入力">
 
-    <div class="card">
+    <div id="zoomCard" class="card hidden">   <!-- 非表示: 要約の解析で内部的に使う -->
       <div class="card-head">
         <span class="step-no">1</span>
         <h2 class="card-title">Zoomの商談内容</h2>
@@ -271,12 +271,11 @@
       </div>
     </div>
 
-    <details id="srcCard" class="card" open>
-      <summary>
-        <span class="step-no">＋</span>
-        <span class="card-title">Zoom要約・URL・Googleカレンダーの取り込み<span class="pill pill-muted" style="margin-left:6px">任意</span></span>
-        <svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>
-      </summary>
+    <div id="srcCard" class="card">
+      <div class="card-head">
+        <span class="step-no">1</span>
+        <h2 class="card-title">Zoom要約・URL・Googleカレンダーの取り込み<span class="pill pill-muted" style="margin-left:6px">任意</span></h2>
+      </div>
       <div class="card-body">
     <div class="start-block">
       <label for="srcSummary" class="label">Zoom Revenue Acceleratorの要約<span class="pill pill-muted">任意</span></label>
@@ -294,7 +293,7 @@
     </div>
 
     <div class="start-block">
-        <details id="gdBox">
+        <details id="gdBox" open>
           <summary style="cursor:pointer;font-weight:600">Googleカレンダー・ドライブから案件の商談ノートを取得<span id="gdPill" class="pill pill-muted" style="margin-left:6px">未ログイン</span></summary>
           <p class="hint" style="margin:8px 0">Googleカレンダーの予定から案件を選び、その案件の商談ノート(Googleドキュメント)をGoogleドライブから探して取り込みます。取り込むと、発注書の欄に反映します。Googleにログインして読み取るだけで、書き込み・削除はしません。サーバーは要りません。準備のしかたは、READMEの「Googleカレンダー・ドライブの連携」を見てください。</p>
           <label for="gdClientId" class="label">GoogleのOAuthクライアントID</label>
@@ -323,7 +322,7 @@
             <button id="btnGdImport" type="button" class="btn btn-sm btn-primary" style="margin-top:8px">この商談ノートを取り込む</button>
           </div>
           <div id="gdStatus" class="hint" style="margin-top:6px" role="status"></div>
-        </details>
+        </div>
     </div>
 
       </div>
@@ -2248,7 +2247,7 @@
     $('btnRestart').classList.remove('hidden');
     renderAll();
     refreshAll();
-    $('transcript').focus();
+    $('srcSummary').focus();
     if ($('hsDealId').value.trim() && hsReady()) hsLoadInfo(true);   // 取引IDが入り、トークンが設定済みなら、HubSpotの情報も読み取る
     if (announce) {
       toast('文字起こし（.vtt / .txt）を入れるか貼り付けると、自動で項目を埋めます');
