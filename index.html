@@ -281,7 +281,13 @@
       <label for="srcSummary" class="label">Zoom Revenue Acceleratorの要約<span class="pill pill-muted">任意</span></label>
       <p class="hint" style="margin-bottom:8px">Zoom Revenue Accelerator(旧 Zoom IQ)の商談の画面から、AIが作った要約をコピーして、ここに貼ってください。下の「要約を解析して発注書に反映」を押すと、発注書の欄に入れます。（要約がなければ、上の「Zoomの商談内容」に、文字起こしを貼ることもできます）</p>
       <textarea id="srcSummary" rows="6" class="control" placeholder="Zoom Revenue Acceleratorの要約を貼り付け"></textarea>
-      <button id="btnApplySummary" type="button" class="btn btn-sm btn-primary" style="margin-top:8px">もう一度解析する</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+        <label class="btn btn-sm" style="cursor:pointer">
+          <svg class="icon" aria-hidden="true"><use href="#i-file"/></svg>ファイルを選択(.txt / .vtt)
+          <input id="summaryFile" type="file" accept=".vtt,.txt,text/plain,text/vtt" class="hidden">
+        </label>
+        <button id="btnApplySummary" type="button" class="btn btn-sm btn-primary">もう一度解析する</button>
+      </div>
     </div>
 
     <div class="start-block">
@@ -1481,7 +1487,7 @@
   /* ---------- HubSpotにある情報（取引・会社）を取得して、発注書に反映 ---------- */
   // 取引IDとトークンで、HubSpotから読み取るだけ（書き込みはしない）。読むのは、取引と、取引に紐づく会社だけ（担当者・ノートは読まない）。
   // 取得した内容は画面に表示し、欄にも反映する（手入力欄は上書きしない）
-  let srcHsText = '';
+  let srcHsText = '', hsSalesAuto = false;
   const hsPlain = (html) => {
     if (!html) return '';
     const withBreaks = String(html).replace(/<\s*br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h[1-6])>/gi, '\n');
@@ -1491,11 +1497,18 @@
 
   async function hsFetchBundle(dealId, token) {
     const enc = encodeURIComponent(dealId);
-    const d = await hsRequest(`/crm/v3/objects/deals/${enc}?properties=dealname,dealstage,pipeline,amount,closedate,description&associations=companies`, token);
+    const d = await hsRequest(`/crm/v3/objects/deals/${enc}?properties=dealname,dealstage,pipeline,amount,closedate,description,hubspot_owner_id&associations=companies`, token);
     if (!d.res.ok) throw new Error(hsErrorText('取引の取得', d.res, d.json));
     const assoc = (d.json && d.json.associations) || {};
     const cids = ((assoc.companies && assoc.companies.results) || []).map(r => String(r.id)).filter(Boolean);
-    const out = { deal: d.json.properties || {}, company: null, companyId: '', warnings: [] };
+    const out = { deal: d.json.properties || {}, company: null, companyId: '', owner: '', warnings: [] };
+    // 取引の担当者(営業)の名前。権限(crm.objects.owners.read)が無いときは、スキップして案内する
+    const oid = out.deal.hubspot_owner_id;
+    if (oid && /^\d+$/.test(String(oid))) {
+      const o = await hsRequest(`/crm/v3/owners/${encodeURIComponent(oid)}`, token);
+      if (o.res.ok && o.json) out.owner = [o.json.lastName, o.json.firstName].filter(Boolean).join('') || String(o.json.email || '').split('@')[0];
+      else out.warnings.push('担当営業の名前を取得できませんでした（権限 crm.objects.owners.read を確認）。');
+    }
     if (cids[0]) {
       out.companyId = cids[0];
       const c = await hsRequest(`/crm/v3/objects/companies/${encodeURIComponent(cids[0])}?properties=name,phone,address,address2,city,state,zip,domain,website,industry,description`, token);
@@ -1518,6 +1531,7 @@
     const d = b.deal;
     const rows = [
       ['取引', [d.dealname, d.dealstage && `（ステージ: ${d.dealstage}）`].filter(Boolean).join(' ')],
+      ['取引の担当営業', b.owner],
       ['取引の説明', hsPlain(d.description)],
       ['会社', c.name], ['電話', c.phone], ['住所', [c.zip, c.state, c.city, c.address, c.address2].filter(Boolean).join(' ')],
       ['サイト', c.website || c.domain],
@@ -1544,6 +1558,7 @@
       renderHsInfo(b);
       srcHsText = hsToSourceText(b);
       if (b.companyId && !$('hsCompanyId').value.trim()) $('hsCompanyId').value = b.companyId;
+      if (b.owner && (!$('sales').value.trim() || hsSalesAuto)) { $('sales').value = b.owner; hsSalesAuto = true; }   // 手入力の担当営業は、上書きしない
       const n = applySourceInfo();
       applyStartUrls();   // サイト・SNSのURLを欄へ
       reviewed = true;
@@ -2351,14 +2366,15 @@
     const sumBox = $('srcSummary');
     ['dragenter', 'dragover'].forEach(ev => sumBox.addEventListener(ev, e => { e.preventDefault(); sumBox.classList.add('drop-active'); }));
     ['dragleave', 'drop'].forEach(ev => sumBox.addEventListener(ev, e => { e.preventDefault(); sumBox.classList.remove('drop-active'); }));
-    sumBox.addEventListener('drop', async (e) => {
-      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    const loadSummaryFile = async (f) => {
       if (!f) return;
       if (!/\.(vtt|txt)$/i.test(f.name)) { toast('.vtt または .txt ファイルを入れてください', false); return; }
       sumBox.value = await f.text();
       srcSummaryText = sumBox.value;
       applySummary(false);
-    });
+    };
+    sumBox.addEventListener('drop', (e) => loadSummaryFile(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]));
+    $('summaryFile').addEventListener('change', (e) => { loadSummaryFile(e.target.files[0]); e.target.value = ''; });
     $('btnApplyUrls').addEventListener('click', () => {
       parseStartUrls();
       const { n, skipped } = applyStartUrls();
@@ -2450,6 +2466,7 @@
     $('btnAnalyze').addEventListener('click', runAnalyze);
     $('client').addEventListener('input', () => { $('clientAuto').classList.add('hidden'); scheduleHsFind(); });
     $('hsDealId').addEventListener('input', () => { hsIdAuto = false; });
+    $('sales').addEventListener('input', () => { hsSalesAuto = false; });
     $('btnHsFind').addEventListener('click', () => hsFindDeals(false));
     $('btnHsPick').addEventListener('click', () => { const v = $('hsCand').value; if (v) { hsFindSay('取引を選びました。'); hsUseDeal(v); } });
     $('btnCopyConfirm').addEventListener('click', async () => {
