@@ -216,57 +216,10 @@
     </div>
     <div class="start-head">
       <h2>今回の案件を選んでください</h2>
-      <p>Zoom Revenue Acceleratorの要約（または文字起こし）を貼ると、発注書の項目を自動で埋めます。</p>
+      <p>商材を選ぶと、発注書の入力画面が開きます。</p>
     </div>
 
     <div class="start-block">
-      <label for="srcSummary" class="label">Zoom Revenue Acceleratorの要約<span class="pill pill-muted">任意</span></label>
-      <p class="hint" style="margin-bottom:8px">Zoom Revenue Accelerator(旧 Zoom IQ)の商談の画面から、AIが作った要約をコピーして、ここに貼ってください。商材を選ぶと、そのまま解析して、発注書の欄に入れます。（要約がなければ、商材を選んだあとに、Zoomの文字起こしを貼ることもできます）</p>
-      <textarea id="srcSummary" rows="6" class="control" placeholder="Zoom Revenue Acceleratorの要約を貼り付け"></textarea>
-    </div>
-
-    <div class="start-block">
-      <label for="startUrls" class="label">お客様に見せたURL<span class="pill pill-muted">任意</span></label>
-      <p class="hint" style="margin-bottom:8px">お客様に見せた資料・サイトのURL、既存サイト、Instagram・X・Facebook、GoogleビジネスプロフィールのURLを、改行やスペース区切りでまとめて貼ってください。種類は自動で振り分けます（変更もできます）。下の商材ボタンを押すと、発注書の該当欄に転記されます。</p>
-      <textarea id="startUrls" rows="4" placeholder="https://..." class="control"></textarea>
-      <div id="startUrlList" class="url-list"></div>
-    </div>
-
-    <div class="start-block">
-        <details id="gdBox" style="margin-top:10px">
-          <summary style="cursor:pointer;font-weight:600">Googleカレンダー・ドライブから案件の商談ノートを取得<span id="gdPill" class="pill pill-muted" style="margin-left:6px">未ログイン</span></summary>
-          <p class="hint" style="margin:8px 0">Googleカレンダーの予定から案件を選び、その案件の商談ノート(Googleドキュメント)をGoogleドライブから探して取り込みます。取り込んだあと、下の商材を選ぶと、発注書の欄に反映します。Googleにログインして読み取るだけで、書き込み・削除はしません。サーバーは要りません。準備のしかたは、READMEの「Googleカレンダー・ドライブの連携」を見てください。</p>
-          <label for="gdClientId" class="label">GoogleのOAuthクライアントID</label>
-          <input id="gdClientId" type="text" autocomplete="off" class="control" style="margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px" placeholder="123456789-xxxx.apps.googleusercontent.com">
-          <label class="check-row" style="margin-top:6px"><input id="gdRemember" type="checkbox">クライアントIDを、このブラウザのLocalStorageに保存する</label>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
-            <button id="btnGdEvents" type="button" class="btn btn-sm btn-primary">ログインして予定を取得</button>
-          </div>
-          <div id="gdEventWrap" class="hidden" style="margin-top:8px">
-            <label for="gdCal" class="label">カレンダー（営業ごとの共有カレンダーなど）</label>
-            <select id="gdCal" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
-            <label for="gdFilter" class="label" style="margin-top:8px;display:block">予定の絞り込み（顧客名・担当名など）</label>
-            <input id="gdFilter" type="text" class="control" style="margin-top:4px" placeholder="入力すると、下の一覧が絞られます">
-            <label for="gdEvents" class="label" style="margin-top:8px;display:block">案件（カレンダーの予定）</label>
-            <select id="gdEvents" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
-            <label for="gdQuery" class="label" style="margin-top:8px;display:block">ノートの検索語（顧客名など。直してもよい）</label>
-            <input id="gdQuery" type="text" class="control" style="margin-top:4px">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
-              <button id="btnGdDocs" type="button" class="btn btn-sm btn-primary">商談ノートを探す</button>
-              <button id="btnGdEventOnly" type="button" class="btn btn-sm">予定だけ取り込む</button>
-            </div>
-          </div>
-          <div id="gdDocWrap" class="hidden" style="margin-top:8px">
-            <label for="gdDocs" class="label">商談ノート（Googleドライブ）</label>
-            <select id="gdDocs" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
-            <button id="btnGdImport" type="button" class="btn btn-sm btn-primary" style="margin-top:8px">この商談ノートを取り込む</button>
-          </div>
-          <div id="gdStatus" class="hint" style="margin-top:6px" role="status"></div>
-        </details>
-    </div>
-
-    <div class="start-block">
-      <p class="label" style="margin:0">商材を選ぶ</p>
       <div class="tiles">
         <button type="button" data-product="nest" class="tile">
           <span class="tile-name">nest</span>
@@ -317,6 +270,64 @@
         <p class="hint" style="margin-top:10px">※ 解析は、ブラウザ内のルールベースで行います（AI・外部送信なし）。抽出結果は必ず目視で確認してください。</p>
       </div>
     </div>
+
+    <details id="srcCard" class="card" open>
+      <summary>
+        <span class="step-no">＋</span>
+        <span class="card-title">Zoom要約・URL・Googleカレンダーの取り込み<span class="pill pill-muted" style="margin-left:6px">任意</span></span>
+        <svg class="icon chev" aria-hidden="true"><use href="#i-chevron"/></svg>
+      </summary>
+      <div class="card-body">
+    <div class="start-block">
+      <label for="srcSummary" class="label">Zoom Revenue Acceleratorの要約<span class="pill pill-muted">任意</span></label>
+      <p class="hint" style="margin-bottom:8px">Zoom Revenue Accelerator(旧 Zoom IQ)の商談の画面から、AIが作った要約をコピーして、ここに貼ってください。下の「要約を解析して発注書に反映」を押すと、発注書の欄に入れます。（要約がなければ、上の「Zoomの商談内容」に、文字起こしを貼ることもできます）</p>
+      <textarea id="srcSummary" rows="6" class="control" placeholder="Zoom Revenue Acceleratorの要約を貼り付け"></textarea>
+      <button id="btnApplySummary" type="button" class="btn btn-sm btn-primary" style="margin-top:8px">要約を解析して発注書に反映</button>
+    </div>
+
+    <div class="start-block">
+      <label for="startUrls" class="label">お客様に見せたURL<span class="pill pill-muted">任意</span></label>
+      <p class="hint" style="margin-bottom:8px">お客様に見せた資料・サイトのURL、既存サイト、Instagram・X・Facebook、GoogleビジネスプロフィールのURLを、改行やスペース区切りでまとめて貼ってください。種類は自動で振り分けます（変更もできます）。下の「URLを発注書に転記」を押すと、発注書の該当欄に転記されます。</p>
+      <textarea id="startUrls" rows="4" placeholder="https://..." class="control"></textarea>
+      <div id="startUrlList" class="url-list"></div>
+      <button id="btnApplyUrls" type="button" class="btn btn-sm" style="margin-top:8px">URLを発注書に転記</button>
+    </div>
+
+    <div class="start-block">
+        <details id="gdBox">
+          <summary style="cursor:pointer;font-weight:600">Googleカレンダー・ドライブから案件の商談ノートを取得<span id="gdPill" class="pill pill-muted" style="margin-left:6px">未ログイン</span></summary>
+          <p class="hint" style="margin:8px 0">Googleカレンダーの予定から案件を選び、その案件の商談ノート(Googleドキュメント)をGoogleドライブから探して取り込みます。取り込むと、発注書の欄に反映します。Googleにログインして読み取るだけで、書き込み・削除はしません。サーバーは要りません。準備のしかたは、READMEの「Googleカレンダー・ドライブの連携」を見てください。</p>
+          <label for="gdClientId" class="label">GoogleのOAuthクライアントID</label>
+          <input id="gdClientId" type="text" autocomplete="off" class="control" style="margin-top:4px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px" placeholder="123456789-xxxx.apps.googleusercontent.com">
+          <label class="check-row" style="margin-top:6px"><input id="gdRemember" type="checkbox">クライアントIDを、このブラウザのLocalStorageに保存する</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+            <button id="btnGdEvents" type="button" class="btn btn-sm btn-primary">ログインして予定を取得</button>
+          </div>
+          <div id="gdEventWrap" class="hidden" style="margin-top:8px">
+            <label for="gdCal" class="label">カレンダー（営業ごとの共有カレンダーなど）</label>
+            <select id="gdCal" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
+            <label for="gdFilter" class="label" style="margin-top:8px;display:block">予定の絞り込み（顧客名・担当名など）</label>
+            <input id="gdFilter" type="text" class="control" style="margin-top:4px" placeholder="入力すると、下の一覧が絞られます">
+            <label for="gdEvents" class="label" style="margin-top:8px;display:block">案件（カレンダーの予定）</label>
+            <select id="gdEvents" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
+            <label for="gdQuery" class="label" style="margin-top:8px;display:block">ノートの検索語（顧客名など。直してもよい）</label>
+            <input id="gdQuery" type="text" class="control" style="margin-top:4px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+              <button id="btnGdDocs" type="button" class="btn btn-sm btn-primary">商談ノートを探す</button>
+              <button id="btnGdEventOnly" type="button" class="btn btn-sm">予定だけ取り込む</button>
+            </div>
+          </div>
+          <div id="gdDocWrap" class="hidden" style="margin-top:8px">
+            <label for="gdDocs" class="label">商談ノート（Googleドライブ）</label>
+            <select id="gdDocs" class="control control-sm" style="max-width:100%;margin-top:4px"></select>
+            <button id="btnGdImport" type="button" class="btn btn-sm btn-primary" style="margin-top:8px">この商談ノートを取り込む</button>
+          </div>
+          <div id="gdStatus" class="hint" style="margin-top:6px" role="status"></div>
+        </details>
+    </div>
+
+      </div>
+    </details>
 
     <details id="hsSettings" class="card">
       <summary>
@@ -1577,7 +1588,7 @@
           return;
         }
       }
-      const kind = isNest() ? '【nestの発注】' : '【制作発注】';
+      const kind = isNest() ? '【nestの発注】' : '【RAQMO-LP】';
       const body = {
         properties: {
           subject: `${kind}${$('client').value.trim() || '（顧客名未入力）'}`,
@@ -1797,10 +1808,6 @@
     const e = gdCurrentEvent();
     srcCalText = e ? [e.summary, gdPlain(e.description)].filter(Boolean).join('\n') : '';
     srcNoteText = noteText || '';
-    if ($('startScreen')) {   // 商材を選ぶ前: 内容を覚えておき、商材を選んだときに欄へ反映する
-      gdSay(`取り込みました。${srcPreviewText()}　下の商材を選ぶと、発注書の欄に反映します。`);
-      return -1;
-    }
     const n = applySourceInfo();
     applyStartUrls();
     reviewed = true;
@@ -2240,20 +2247,10 @@
     $('productPill').classList.remove('hidden');
     $('btnRestart').classList.remove('hidden');
     renderAll();
-    const nSrc = applySourceInfo();
-    const { n, skipped } = applyStartUrls();
     refreshAll();
     $('transcript').focus();
     if ($('hsDealId').value.trim() && hsReady()) hsLoadInfo(true);   // 取引IDが入り、トークンが設定済みなら、HubSpotの情報も読み取る
-    if (srcSummaryText.trim()) {   // Zoomの要約が貼ってあれば、そのまま解析する
-      $('transcript').value = srcSummaryText;
-      runAnalyze();
-      return;
-    }
-    if (nSrc && !n && !skipped) toast(`取り込んだ資料から${nSrc}項目を反映しました。内容を確認してください`);
-    else if (n || skipped) {
-      toast(`URLを${n}項目に転記しました${skipped ? `（転記先が無い${skipped}件はスキップ）` : ''}。文字起こしを入れると、残りの項目を自動で埋めます`);
-    } else if (announce) {
+    if (announce) {
       toast('文字起こし（.vtt / .txt）を入れるか貼り付けると、自動で項目を埋めます');
     }
   }
@@ -2263,6 +2260,18 @@
     try { q = (new URLSearchParams(location.search).get('product') || '').toLowerCase(); } catch { q = ''; }
     $('startUrls').addEventListener('input', parseStartUrls);
     $('srcSummary').addEventListener('input', () => { srcSummaryText = $('srcSummary').value; });
+    // 商材を選んだあとの画面で使う: 要約の解析、URLの転記
+    $('btnApplySummary').addEventListener('click', () => {
+      if (!srcSummaryText.trim()) { toast('Zoomの要約を貼り付けてください', false); return; }
+      $('transcript').value = srcSummaryText;
+      runAnalyze();
+    });
+    $('btnApplyUrls').addEventListener('click', () => {
+      parseStartUrls();
+      const { n, skipped } = applyStartUrls();
+      refreshAll();
+      toast(n || skipped ? `URLを${n}項目に転記しました${skipped ? `（転記先が無い${skipped}件はスキップ）` : ''}` : '転記するURLがありません', !!(n || skipped));
+    });
     document.querySelectorAll('#startScreen [data-product]').forEach(b => {
       b.addEventListener('click', () => chooseProduct(b.dataset.product));
     });
